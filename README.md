@@ -1,85 +1,120 @@
-
-# LLM-Improvement-with-RAG: Talk with PDF with LLM (End-to-End Chatbot Development)
-![image](https://github.com/user-attachments/assets/7605ae22-8f47-40fd-b308-142217f89f49)
-
-This project demonstrates the development of a **Retrieval-Augmented Generation (RAG)**-based chatbot using **LangChain** and **Ollama**. The chatbot can interact with PDF documents, retrieve relevant information, and provide accurate, context-aware responses.
-
-## Features
-
-- **PDF Chatbot**: Upload PDFs to query and retrieve answers using a conversational interface.
-- **Local Vector Database**: Embeddings are stored in a local vector database (`ChromaDB`).
-- **LLM Integration**: Uses the Ollama LLM (`llama3.2:1b`) for natural language processing.
-- **Persistent Memory**: Conversation memory is maintained for contextual responses.
-
----
+# RAG Chatbot Ollama
 
 ## Project Structure
 
-```plaintext
-LLM-Improvement-with-RAG/
-│
-├── app.py               # Streamlit application for chatbot
-├── pdfFiles/            # Directory to store uploaded PDF files
-├── vectorDB/            # Directory to store vector database
-├── requirements.txt     # Python dependencies
-└── README.md            # Project documentation
+The project has been refactored into a modular architecture with clear separation of concerns:
+
+```
+.
+├── app.py                 # Streamlit UI application
+├── chatbot.py            # Main chatbot orchestrator
+├── config.py             # Configuration settings
+├── document_processor.py # PDF processing module
+├── llm_handler.py        # Ollama LLM integration
+├── vector_store.py       # ChromaDB vector store management
+├── utils.py              # Utility functions
+├── pdfFiles/             # Directory for uploaded PDFs
+└── vectorDB/             # Directory for vector database
 ```
 
----
+## Module Descriptions
 
-## Setup Instructions
+### 1. **config.py**
+Central configuration file containing:
+- Directory paths
+- LLM model settings
+- Document processing parameters
+- UI configurations
+- Message templates
 
-### 1. **Install Prerequisites**
+### 2. **document_processor.py**
+Handles all PDF-related operations:
+- `DocumentProcessor` class
+- PDF file saving and loading
+- Text extraction from PDFs
+- Document chunking with configurable parameters
+- Support for single and multiple PDF processing
 
-Ensure you have Python 3.8 or above installed.
+### 3. **vector_store.py**
+Manages ChromaDB vector database:
+- `VectorStoreManager` class
+- Vector store creation and persistence
+- Document embedding generation
+- Similarity search functionality
+- Retriever creation for QA chains
 
-Install the required Python libraries using:
+### 4. **llm_handler.py**
+Interfaces with Ollama LLM:
+- `LLMHandler` class
+- LLM initialization and configuration
+- Conversation memory management
+- QA chain creation with retrieval
+- Direct response generation
 
-```bash
-pip install -r requirements.txt
-```
+### 5. **chatbot.py**
+Main orchestrator that combines all components:
+- `RAGChatbot` class
+- PDF processing pipeline
+- Chat functionality
+- State management
+- Error handling
 
----
+### 6. **utils.py**
+Utility functions including:
+- Logging setup
+- Typing animation effect
+- File validation
+- Source formatting
+- Chat history management
+- Various helper functions
 
-### 2. **Install and Run Ollama**
+### 7. **app.py**
+Streamlit user interface:
+- Session state management
+- File upload interface
+- Chat interface
+- Status displays
+- Configuration options
 
-1. **Download and install Ollama**:  
-   Follow the instructions at [Ollama's website](https://ollama.ai) to install the LLM locally.
+## Key Features
 
-2. **Pull the LLM Model**:  
-   Ensure you download the `llama3.2:1b` model:
+1. **Modular Design**: Each component has a single responsibility
+2. **Error Handling**: Comprehensive error handling with logging
+3. **Type Hints**: Full type annotations for better code clarity
+4. **Logging**: Structured logging throughout the application
+5. **Configuration**: Centralized configuration management
+6. **Scalability**: Easy to extend with new features
 
+## Usage
+
+1. Start Ollama service:
    ```bash
-   ollama pull llama3:2.1b
+   docker start ollama
    ```
 
-3. **Run Ollama Service**:  
-   Start the Ollama server on `localhost:11434`:
-
+2. Run the application:
    ```bash
-   ollama serve
+   conda activate llm-rag
+   streamlit run app.py
    ```
 
----
+3. Upload PDFs through the sidebar
+4. Click "Process PDFs" to analyze documents
+5. Start chatting with your documents
 
-### 3. **Run the Chatbot**
+## Benefits of Modular Architecture
 
-Execute the Streamlit app:
+1. **Maintainability**: Easy to update individual components
+2. **Testability**: Each module can be tested independently
+3. **Reusability**: Components can be reused in other projects
+4. **Clarity**: Clear separation of concerns
+5. **Scalability**: Easy to add new features or swap components
 
-```bash
-streamlit run app.py
-```
+## Extending the Application
 
-This will open the chatbot application in your default browser.
-
----
-
-## How to Use the Application
-
-1. **Upload PDF**: Upload a PDF file using the file uploader on the app interface.
-2. **Chat with the PDF**:
-   - Type a question in the chat input field.
-   - The chatbot will process the PDF, retrieve relevant content, and generate a response.
-3. **Conversation Memory**: The chatbot maintains the conversation history for context-aware interactions.
-
----
+To add new features:
+- New LLM providers: Modify `llm_handler.py`
+- Different vector stores: Update `vector_store.py`
+- Additional file formats: Extend `document_processor.py`
+- UI improvements: Modify `app.py`
+- New utilities: Add to `utils.py`

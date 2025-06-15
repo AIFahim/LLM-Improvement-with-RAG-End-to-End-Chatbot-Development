@@ -1,146 +1,182 @@
+"""
+Streamlit application for the RAG Chatbot
+"""
 import streamlit as st
-import os
-import time
+import logging
+from chatbot import RAGChatbot
+import config
+import utils
 
-# LangChain imports
-from langchain.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
-from langchain_chroma import Chroma
-from langchain_community.llms.ollama import Ollama
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.callbacks.manager import CallbackManager
-from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains import RetrievalQA
+# Setup logging
+utils.setup_logging()
+logger = logging.getLogger(__name__)
 
 
-# Ensure necessary directories exist
-if not os.path.exists('pdfFiles'):
-    os.makedirs('pdfFiles')
-if not os.path.exists('vectorDB'):
-    os.makedirs('vectorDB')
+def initialize_session_state():
+    """Initialize Streamlit session state variables"""
+    if 'chatbot' not in st.session_state:
+        st.session_state.chatbot = RAGChatbot()
+        logger.info("Initialized new chatbot instance")
+    
+    if config.SESSION_MESSAGES not in st.session_state:
+        st.session_state[config.SESSION_MESSAGES] = []
 
-# Initialize session state
-if 'template' not in st.session_state:
-    st.session_state['template'] = """You are a knowledgeable chatbot, here to help with questions of the user. Your tone should be professional and informative.
 
-    Context: {context}
-    History: {history}
+def display_chat_messages():
+    """Display chat messages from history"""
+    for message in st.session_state[config.SESSION_MESSAGES]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    User: {question}
-    Chatbot:"""
 
-if 'prompt' not in st.session_state:
-    st.session_state['prompt'] = PromptTemplate(
-        input_variables=["history", "context", "question"],
-        template=st.session_state['template'],
+def main():
+    """Main Streamlit application"""
+    # Page configuration
+    st.set_page_config(
+        page_title=config.PAGE_TITLE,
+        page_icon=config.PAGE_ICON,
+        layout=config.PAGE_LAYOUT
     )
-
-if 'memory' not in st.session_state:
-    st.session_state['memory'] = ConversationBufferMemory(
-        memory_key="history",
-        return_messages=True,
-        input_key="question",
-    )
-
-if 'vectorstore' not in st.session_state:
-    st.session_state['vectorstore'] = Chroma(
-        persist_directory='vectorDB',
-        embedding_function=OllamaEmbeddings(
-            base_url='http://localhost:11434',
-            model="llama3.2:1b"
+    
+    # Initialize session state
+    initialize_session_state()
+    
+    # Application header
+    st.title(config.PAGE_TITLE)
+    st.markdown(config.WELCOME_MESSAGE)
+    
+    # Sidebar for PDF upload and settings
+    with st.sidebar:
+        st.header("📄 Document Upload")
+        
+        # File uploader
+        uploaded_files = st.file_uploader(
+            "Choose PDF files",
+            type=['pdf'],
+            accept_multiple_files=True
         )
-    )
+        
+        if uploaded_files:
+            # Validate files
+            valid_files = []
+            for file in uploaded_files:
+                if utils.validate_pdf_file(file):
+                    valid_files.append(file)
+                    st.success(f"✅ {file.name} ({utils.get_file_size_mb(file):.2f} MB)")
+                else:
+                    st.error(f"❌ {file.name} is not a valid PDF")
+            
+            # Process button
+            if valid_files and st.button("Process PDFs", type="primary"):
+                with st.spinner(config.PROCESSING_MESSAGE):
+                    try:
+                        success = st.session_state.chatbot.process_pdfs(valid_files)
+                        if success:
+                            st.success(config.SUCCESS_MESSAGE)
+                            st.balloons()
+                        else:
+                            st.error("Failed to process PDFs. Please check the logs.")
+                    except Exception as e:
+                        st.error(config.ERROR_MESSAGE.format(str(e)))
+                        logger.error(f"Error processing PDFs: {e}")
+        
+        # Additional options
+        st.divider()
+        st.header("⚙️ Options")
+        
+        # Clear chat history
+        if st.button("Clear Chat History"):
+            st.session_state.chatbot.clear_chat_history()
+            st.session_state[config.SESSION_MESSAGES] = []
+            st.success("Chat history cleared!")
+        
+        # Reset entire chatbot
+        if st.button("Reset Chatbot", help="Clear all data and start fresh"):
+            st.session_state.chatbot.reset()
+            st.session_state[config.SESSION_MESSAGES] = []
+            st.success("Chatbot reset successfully!")
+            st.rerun()
+        
+        # Display chatbot status
+        st.divider()
+        if st.session_state.chatbot.is_ready:
+            st.success("🟢 Chatbot is ready!")
+        else:
+            st.info("🔴 " + config.UPLOAD_PROMPT)
+        
+        # Model information
+        with st.expander("Model Information"):
+            st.write(f"**Model:** {config.LLM_MODEL}")
+            st.write(f"**Base URL:** {config.LLM_BASE_URL}")
+            st.write(f"**Temperature:** {config.LLM_TEMPERATURE}")
+    
+    # Main chat interface
+    if st.session_state.chatbot.is_ready:
+        # Display chat messages
+        display_chat_messages()
+        
+        # Chat input
+        if prompt := st.chat_input("Ask me anything about your documents..."):
+            # Add user message to chat history
+            st.session_state[config.SESSION_MESSAGES].append({
+                "role": "user",
+                "content": prompt
+            })
+            
+            # Display user message
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            
+            # Generate and display assistant response
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    try:
+                        response = st.session_state.chatbot.chat(prompt)
+                        
+                        # Extract answer
+                        answer = response.get('result', 'Sorry, I could not generate a response.')
+                        
+                        # Display with typing effect
+                        utils.display_message_with_typing(answer)
+                        
+                        # Show sources if available
+                        if response.get('source_documents'):
+                            with st.expander("📚 Sources"):
+                                sources = utils.format_sources(response['source_documents'])
+                                st.markdown(sources)
+                        
+                        # Add assistant response to chat history
+                        st.session_state[config.SESSION_MESSAGES].append({
+                            "role": "assistant",
+                            "content": answer
+                        })
+                        
+                    except Exception as e:
+                        error_msg = f"Error: {str(e)}"
+                        st.error(error_msg)
+                        logger.error(f"Chat error: {e}")
+    
+    else:
+        # Welcome screen when no PDFs are loaded
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.info("👈 " + config.UPLOAD_PROMPT)
+            
+            # Instructions
+            st.markdown("""
+            ### How to use:
+            1. Upload one or more PDF files using the sidebar
+            2. Click "Process PDFs" to analyze the documents
+            3. Start asking questions in the chat
+            
+            ### Features:
+            - 🤖 AI-powered document Q&A
+            - 📄 Support for multiple PDFs
+            - 💬 Conversation memory
+            - 📚 Source citations
+            - 🔒 Local processing (your data stays private)
+            """)
 
-if 'llm' not in st.session_state:
-    st.session_state['llm'] = Ollama(
-        base_url="http://localhost:11434",
-        model="llama3.2:1b",
-        verbose=True,
-        callback_manager=CallbackManager(
-            [StreamingStdOutCallbackHandler()]
-        )
-    )
 
-if 'chat_history' not in st.session_state:
-    st.session_state['chat_history'] = []
-
-# Application title
-st.title("Chatbot - to talk to PDFs")
-
-# File uploader
-uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
-
-# Display chat history
-for message in st.session_state['chat_history']:
-    with st.chat_message(message["role"]):
-        st.markdown(message["message"])
-
-# Process uploaded file
-if uploaded_file is not None:
-    st.text("File uploaded successfully")
-    file_path = f'pdfFiles/{uploaded_file.name}'
-    if not os.path.exists(file_path):
-        with st.status("Saving file..."):
-            bytes_data = uploaded_file.read()
-            with open(file_path, 'wb') as f:
-                f.write(bytes_data)
-
-            # Load and process the PDF
-            loader = PyPDFLoader(file_path)
-            data = loader.load()
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1500,
-                chunk_overlap=200,
-                length_function=len
-            )
-            all_splits = text_splitter.split_documents(data)
-
-            # Create vectorstore
-            st.session_state['vectorstore'] = Chroma.from_documents(
-                documents=all_splits,
-                embedding=OllamaEmbeddings(model="llama3.2:1b")
-            )
-            st.session_state['vectorstore']
-
-    # Set up retriever
-    st.session_state['retriever'] = st.session_state['vectorstore'].as_retriever()
-
-    # QA Chain setup
-    if 'qa_chain' not in st.session_state:
-        st.session_state['qa_chain'] = RetrievalQA.from_chain_type(
-            llm=st.session_state['llm'],
-            chain_type='stuff',
-            retriever=st.session_state['retriever'],
-            verbose=True,
-            chain_type_kwargs={
-                "verbose": True,
-                "prompt": st.session_state['prompt'],
-                "memory": st.session_state['memory'],
-            }
-        )
-
-    # Handle user input and chatbot interaction
-    if user_input := st.chat_input("You:", key="user_input"):
-        user_message = {"role": "user", "message": user_input}
-        st.session_state['chat_history'].append(user_message)
-        with st.chat_message("user"):
-            st.markdown(user_input)
-
-        with st.chat_message("assistant"):
-            with st.spinner("Assistant is typing..."):
-                response = st.session_state['qa_chain'](user_input)
-            message_placeholder = st.empty()
-            full_response = ""
-            for chunk in response['result'].split():
-                full_response += chunk + " "
-                time.sleep(0.05)  # Simulate typing
-                message_placeholder.markdown(full_response + "▌")
-            message_placeholder.markdown(full_response)
-
-        chatbot_message = {"role": "assistant", "message": response['result']}
-        st.session_state['chat_history'].append(chatbot_message)
-
-else:
-    st.write("Please upload a PDF file to start the chatbot.")
+if __name__ == "__main__":
+    main()

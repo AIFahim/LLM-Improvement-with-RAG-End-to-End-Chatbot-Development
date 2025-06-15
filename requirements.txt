@@ -1,6 +1,11 @@
 langchain==0.3.11
-langchain-core==0.3.25
+langchain-core>=0.3.25
 langchain-community==0.3.11
-langsmith==0.2.3
-chromadb==0.3.25
-pydantic>=2.7.4,<3.0.0
+langchain-chroma
+langchain-ollama
+chromadb>=1.0.0
+pydantic>=2.7.4
+streamlit>=1.28.0
+pypdf>=3.17.0
+requests>=2.31.0
+termcolor
