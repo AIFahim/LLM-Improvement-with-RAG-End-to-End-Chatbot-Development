@@ -1,7 +1,5 @@
 # LangChain Agent with Memory & Tools
 
-## Class 06: LangChain Deep Dive - Memory, Tools & Agents
-
 This branch extends the RAG chatbot with LangChain's advanced features including conversational memory, custom tools, and ReAct agents.
 
 ## Features
