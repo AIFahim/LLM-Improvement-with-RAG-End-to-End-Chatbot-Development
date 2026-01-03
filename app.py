@@ -106,8 +106,10 @@ def main():
         
         # Model information
         with st.expander("Model Information"):
-            st.write(f"**Model:** {config.LLM_MODEL}")
-            st.write(f"**Base URL:** {config.LLM_BASE_URL}")
+            model_info = st.session_state.chatbot.llm_handler.model_info
+            st.write(f"**Provider:** {model_info['provider']}")
+            st.write(f"**Model:** {model_info['model']}")
+            st.write(f"**Endpoint:** {model_info['endpoint']}")
             st.write(f"**Temperature:** {config.LLM_TEMPERATURE}")
     
     # Main chat interface

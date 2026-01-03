@@ -28,10 +28,10 @@ fi
 # Activate conda environment
 echo -e "${YELLOW}Activating conda environment...${NC}"
 source ~/miniconda3/etc/profile.d/conda.sh
-conda activate llm-rag || {
+conda activate rag_chatbot || {
     echo -e "${RED}Failed to activate conda environment.${NC}"
-    echo "Run: conda create -n llm-rag python=3.10 -y"
-    echo "Then: conda activate llm-rag && pip install -r requirements.txt"
+    echo "Run: conda create -n rag_chatbot python=3.11 -y"
+    echo "Then: conda activate rag_chatbot && pip install -r requirements.txt"
     exit 1
 }
 

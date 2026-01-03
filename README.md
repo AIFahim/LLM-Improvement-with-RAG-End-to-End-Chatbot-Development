@@ -1,120 +1,224 @@
-# RAG Chatbot Ollama
+# RAG Chatbot with Ollama & Azure OpenAI
+
+A modular RAG (Retrieval-Augmented Generation) chatbot that supports both **Ollama** (local) and **Azure OpenAI** (cloud) as LLM providers.
+
+## Quick Start
+
+### 1. Setup Environment
+
+```bash
+# Create conda environment
+conda create -n rag_chatbot python=3.11 -y
+conda activate rag_chatbot
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 2. Setup LLM Provider
+
+#### Option A: Ollama (Local - Free)
+
+```bash
+# Start Ollama with Docker
+docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
+
+# Pull a model
+docker exec ollama ollama pull qwen2.5:1.5b
+```
+
+#### Option B: Azure OpenAI (Cloud)
+
+Create a `.env` file:
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your Azure credentials:
+```env
+AZURE_OPENAI_API_KEY=your-api-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_LLM_DEPLOYMENT_NAME=gpt-4
+```
+
+### 3. Run the Application
+
+```bash
+# Run with Ollama (default)
+python run_app.py
+
+# Run with Azure OpenAI
+python run_app.py --provider azure
+
+# Run with specific options
+python run_app.py --provider ollama --model llama3.2:1b --port 8501
+```
+
+Open http://localhost:8501 in your browser.
+
+---
+
+## Command Line Options
+
+```bash
+python run_app.py --help
+```
+
+| Argument | Short | Default | Description |
+|----------|-------|---------|-------------|
+| `--provider` | `-p` | `ollama` | LLM provider: `ollama` or `azure` |
+| `--model` | `-m` | `qwen2.5:1.5b` | Ollama model name |
+| `--ollama-url` | | `http://localhost:11434` | Ollama base URL |
+| `--api-key` | | from .env | Azure OpenAI API key |
+| `--endpoint` | | from .env | Azure OpenAI endpoint |
+| `--deployment` | `-d` | `gpt-4` | Azure deployment name |
+| `--temperature` | `-t` | `0.7` | LLM temperature |
+| `--port` | | `8501` | Streamlit port |
+| `--check` | | | Validate config only |
+
+### Examples
+
+```bash
+# Check configuration without starting
+python run_app.py --check
+
+# Run with Ollama and specific model
+python run_app.py --provider ollama --model llama3.2:3b
+
+# Run with Azure OpenAI
+python run_app.py --provider azure
+
+# Run with Azure and custom deployment
+python run_app.py --provider azure --deployment gpt-4-turbo
+
+# Run on different port
+python run_app.py --port 8502
+```
+
+---
 
 ## Project Structure
-
-The project has been refactored into a modular architecture with clear separation of concerns:
 
 ```
 .
 ├── app.py                 # Streamlit UI application
-├── chatbot.py            # Main chatbot orchestrator
-├── config.py             # Configuration settings
-├── document_processor.py # PDF processing module
-├── llm_handler.py        # Ollama LLM integration
-├── vector_store.py       # ChromaDB vector store management
-├── utils.py              # Utility functions
-├── pdfFiles/             # Directory for uploaded PDFs
-└── vectorDB/             # Directory for vector database
+├── chatbot.py             # Main chatbot orchestrator
+├── config.py              # Configuration settings
+├── document_processor.py  # PDF processing module
+├── llm_handler.py         # LLM integration (Ollama + Azure)
+├── vector_store.py        # ChromaDB vector store management
+├── utils.py               # Utility functions
+├── run_app.py             # CLI launcher with argparse
+├── run.sh                 # Shell script launcher
+├── .env.example           # Environment template
+├── pdfFiles/              # Directory for uploaded PDFs
+└── vectorDB/              # Directory for vector database
 ```
+
+---
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `LLM_PROVIDER` | `ollama` or `azure` | No (default: ollama) |
+| `OLLAMA_MODEL` | Ollama model name | No |
+| `OLLAMA_BASE_URL` | Ollama API URL | No |
+| `AZURE_OPENAI_API_KEY` | Azure API key | For Azure |
+| `AZURE_OPENAI_ENDPOINT` | Azure endpoint URL | For Azure |
+| `AZURE_LLM_DEPLOYMENT_NAME` | Azure deployment name | For Azure |
+| `AZURE_OPENAI_API_VERSION` | Azure API version | No |
+| `LLM_TEMPERATURE` | Generation temperature | No |
+
+### Supported Ollama Models
+
+```bash
+# Small models (fast, low memory)
+docker exec ollama ollama pull qwen2.5:1.5b
+docker exec ollama ollama pull llama3.2:1b
+docker exec ollama ollama pull phi3:mini
+
+# Medium models (balanced)
+docker exec ollama ollama pull llama3.2:3b
+docker exec ollama ollama pull mistral
+
+# List available models
+docker exec ollama ollama list
+```
+
+---
 
 ## Module Descriptions
 
-### 1. **config.py**
-Central configuration file containing:
-- Directory paths
-- LLM model settings
-- Document processing parameters
-- UI configurations
-- Message templates
+### config.py
+Central configuration with environment variable support for both Ollama and Azure.
 
-### 2. **document_processor.py**
-Handles all PDF-related operations:
-- `DocumentProcessor` class
-- PDF file saving and loading
-- Text extraction from PDFs
-- Document chunking with configurable parameters
-- Support for single and multiple PDF processing
+### llm_handler.py
+Unified LLM handler supporting:
+- Ollama (local models)
+- Azure OpenAI (cloud models)
+- Provider switching at runtime
 
-### 3. **vector_store.py**
-Manages ChromaDB vector database:
-- `VectorStoreManager` class
-- Vector store creation and persistence
-- Document embedding generation
-- Similarity search functionality
-- Retriever creation for QA chains
+### document_processor.py
+PDF processing with:
+- Text extraction
+- Document chunking
+- Multiple file support
 
-### 4. **llm_handler.py**
-Interfaces with Ollama LLM:
-- `LLMHandler` class
-- LLM initialization and configuration
-- Conversation memory management
-- QA chain creation with retrieval
-- Direct response generation
+### vector_store.py
+ChromaDB vector database:
+- Document embedding (via Ollama)
+- Similarity search
+- Persistent storage
 
-### 5. **chatbot.py**
-Main orchestrator that combines all components:
-- `RAGChatbot` class
-- PDF processing pipeline
-- Chat functionality
-- State management
-- Error handling
+### chatbot.py
+Main orchestrator combining all components.
 
-### 6. **utils.py**
-Utility functions including:
-- Logging setup
-- Typing animation effect
-- File validation
-- Source formatting
-- Chat history management
-- Various helper functions
-
-### 7. **app.py**
-Streamlit user interface:
-- Session state management
-- File upload interface
+### app.py
+Streamlit UI with:
+- File upload
 - Chat interface
-- Status displays
-- Configuration options
+- Provider info display
 
-## Key Features
-
-1. **Modular Design**: Each component has a single responsibility
-2. **Error Handling**: Comprehensive error handling with logging
-3. **Type Hints**: Full type annotations for better code clarity
-4. **Logging**: Structured logging throughout the application
-5. **Configuration**: Centralized configuration management
-6. **Scalability**: Easy to extend with new features
+---
 
 ## Usage
 
-1. Start Ollama service:
-   ```bash
-   docker start ollama
-   ```
+1. Start the application with your preferred provider
+2. Upload PDF files through the sidebar
+3. Click "Process PDFs" to analyze documents
+4. Start asking questions about your documents
 
-2. Run the application:
-   ```bash
-   conda activate llm-rag
-   streamlit run app.py
-   ```
+---
 
-3. Upload PDFs through the sidebar
-4. Click "Process PDFs" to analyze documents
-5. Start chatting with your documents
+## Troubleshooting
 
-## Benefits of Modular Architecture
+### Ollama not running
+```bash
+docker start ollama
+# or
+docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
+```
 
-1. **Maintainability**: Easy to update individual components
-2. **Testability**: Each module can be tested independently
-3. **Reusability**: Components can be reused in other projects
-4. **Clarity**: Clear separation of concerns
-5. **Scalability**: Easy to add new features or swap components
+### Model not found
+```bash
+docker exec ollama ollama pull qwen2.5:1.5b
+```
 
-## Extending the Application
+### Azure authentication error
+- Verify API key in `.env`
+- Check endpoint URL format
+- Confirm deployment name matches Azure portal
 
-To add new features:
-- New LLM providers: Modify `llm_handler.py`
-- Different vector stores: Update `vector_store.py`
-- Additional file formats: Extend `document_processor.py`
-- UI improvements: Modify `app.py`
-- New utilities: Add to `utils.py`
+### Port already in use
+```bash
+python run_app.py --port 8502
+```
+
+---
+
+## License
+
+MIT License
