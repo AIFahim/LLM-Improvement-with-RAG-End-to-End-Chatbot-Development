@@ -4,7 +4,7 @@ Vector store module for managing ChromaDB operations (Fixed version)
 from typing import List, Optional
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
-from langchain.schema import Document
+from langchain_core.documents import Document
 import chromadb
 from chromadb.config import Settings
 import config
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class VectorStoreManager:
     """Manages vector database operations with ChromaDB"""
     
-    def __init__(self, model_name: str = config.LLM_MODEL,
-                 base_url: str = config.LLM_BASE_URL):
+    def __init__(self, model_name: str = config.OLLAMA_MODEL,
+                 base_url: str = config.OLLAMA_BASE_URL):
         """
         Initialize the vector store manager
         
