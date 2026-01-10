@@ -30,3 +30,7 @@ pypdf>=3.17.0
 # Utilities
 requests>=2.31.0
 termcolor
+
+# Multi-Agent Systems (Class 07)
+crewai>=0.86.0
+crewai-tools>=0.17.0

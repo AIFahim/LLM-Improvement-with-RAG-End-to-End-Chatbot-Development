@@ -1,119 +1,93 @@
-# LangChain Agent with Memory & Tools
+# Multi-Agent Systems with CrewAI
 
-This branch extends the RAG chatbot with LangChain's advanced features including conversational memory, custom tools, and ReAct agents.
+This branch implements Class 07: Multi-Agent Systems using CrewAI for collaborative report writing.
 
 ## Features
 
-- **Multiple Memory Types**: Buffer, Window, Vector, and LangGraph memory
-- **Custom Tools**: Calculator, Web Search, Python REPL, DateTime, RAG Search
-- **ReAct Agent**: Reasoning + Acting pattern using LangGraph
-- **Dual Mode**: RAG-only chatbot OR Agent with tools
-- **Streamlit UI**: Interactive web interface for both modes
+- **Multi-Role Agents**: Planner, Researcher, Writer, Critic, Summarizer
+- **Planner-Executor-Critic Model**: Structured workflow for quality output
+- **CrewAI Integration**: Agent orchestration and task management
+- **Multiple Workflows**: Full report, quick report, research-only
+- **Streamlit UI**: Interactive web interface for report generation
+- **CLI Support**: Generate reports from command line
 
 ## Project Structure
 
 ```
 .
-├── agent.py               # LangGraph ReAct agent implementation
-├── agent_app.py           # Streamlit UI for agent mode
-├── memory_manager.py      # Memory types (buffer, window, vector)
-├── tools.py               # Custom tools (calculator, search, REPL, etc.)
-├── run_agent.py           # CLI launcher for agent app
-├── example_agent_usage.py # Demo examples
-├── app.py                 # Original RAG chatbot UI
-├── chatbot.py             # RAG chatbot orchestrator
-├── config.py              # Configuration settings
-├── document_processor.py  # PDF processing
-├── llm_handler.py         # LLM integration (Ollama/Azure)
-├── vector_store.py        # ChromaDB vector store
-├── utils.py               # Utility functions
-├── requirements.txt       # Dependencies
-├── pdfFiles/              # PDF storage
-├── vectorDB/              # Vector database
-└── memoryDB/              # Vector memory storage
+├── crew_agents.py        # Multi-role agent definitions
+├── crew_tasks.py         # Task definitions for workflows
+├── crew_main.py          # CrewAI orchestration
+├── crew_app.py           # Streamlit UI
+├── run_crew.py           # CLI launcher
+├── reports/              # Generated reports output
+├── agent.py              # LangGraph ReAct agent (Class 06)
+├── tools.py              # Custom tools
+├── memory_manager.py     # Memory types
+├── app.py                # RAG chatbot UI
+├── chatbot.py            # RAG orchestrator
+└── requirements.txt      # Dependencies
 ```
 
-## New Modules
+## New Modules (Class 07)
 
-### 1. memory_manager.py
+### 1. crew_agents.py
 
-Implements multiple memory types for conversation history:
+Defines multi-role agents for collaborative work:
 
-| Memory Type | Description | Use Case |
-|-------------|-------------|----------|
-| `BUFFER` | Stores all messages | Short conversations |
-| `WINDOW` | Keeps last K messages | Long conversations |
-| `VECTOR` | Semantic search over history | Topic recall |
-| `LANGGRAPH` | Checkpoint-based memory | Persistent agents |
+| Agent | Role | Capabilities |
+|-------|------|--------------|
+| Planner | Report Planner | Creates outlines, identifies research areas |
+| Researcher | Research Analyst | Gathers facts, statistics, evidence |
+| Writer | Content Writer | Composes clear, engaging content |
+| Critic | Quality Reviewer | Reviews and provides feedback |
+| Summarizer | Executive Summarizer | Creates concise summaries |
 
 ```python
-from memory_manager import MemoryManager, MemoryType
+from crew_agents import AgentFactory
 
-# Create buffer memory
-memory = MemoryManager(memory_type=MemoryType.BUFFER)
-memory.add_user_message("Hello")
-memory.add_ai_message("Hi there!")
+factory = AgentFactory(verbose=True)
+agents = factory.create_all_agents()
 
-# Create window memory (last 5 turns)
-memory = MemoryManager(memory_type=MemoryType.WINDOW, k=5)
+# Or create specific agents
+planner = factory.create_planner()
+researcher = factory.create_researcher()
 ```
 
-### 2. tools.py
+### 2. crew_tasks.py
 
-Custom tools for the agent:
-
-| Tool | Description | Example |
-|------|-------------|---------|
-| `CalculatorTool` | Math expressions | `sqrt(16) + 2^3` |
-| `WebSearchTool` | DuckDuckGo search | Search the internet |
-| `SafePythonREPLTool` | Execute Python code | Data processing |
-| `DateTimeTool` | Current date/time | `now`, `weekday` |
-| `RAGSearchTool` | Search uploaded PDFs | Document Q&A |
+Defines tasks for the report writing workflow:
 
 ```python
-from tools import CalculatorTool, DateTimeTool, ToolFactory
+from crew_tasks import TaskFactory, create_planning_task
 
-# Use individual tools
-calc = CalculatorTool()
-result = calc._run("25 * 4")  # Returns "100"
-
-# Get all tools
-factory = ToolFactory(vector_store=my_vector_store)
-tools = factory.get_all_tools()
+# Use factory with agents
+factory = TaskFactory(agents)
+tasks = factory.create_report_workflow(
+    topic="AI in Healthcare",
+    style="professional",
+    word_count=1500,
+)
 ```
 
-### 3. agent.py
+### 3. crew_main.py
 
-LangGraph ReAct agent with tools and memory:
+Orchestrates multi-agent collaboration:
 
 ```python
-from agent import create_agent
+from crew_main import create_report_crew
 
-# Create agent with tools
-agent = create_agent(
-    memory_type="buffer",
-    use_tools=True,
-    vector_store=None  # Optional: for RAG search
+# Create and run crew
+crew = create_report_crew(crew_type="report_writing")
+result = crew.create_report(
+    topic="The Future of Renewable Energy",
+    requirements="Focus on solar and wind technologies",
+    style="professional",
+    workflow="full_report",
 )
 
-# Chat with agent
-response = agent.chat("What is 25 * 4?")
-print(response)  # "The result is 100"
-
-# Get full response with tool calls
-result = agent.get_full_response("What day is it?")
-print(result["output"])       # "Today is Saturday"
-print(result["tool_calls"])   # List of tool calls made
+print(result["result"])  # The generated report
 ```
-
-### 4. agent_app.py
-
-Streamlit UI for the agent with:
-- Memory type selection
-- Tool enable/disable
-- Agent thinking process display
-- PDF upload for RAG search
-- Chat history management
 
 ## Installation
 
@@ -121,30 +95,15 @@ Streamlit UI for the agent with:
 # Clone and checkout branch
 git clone https://github.com/AIFahim/LLM-Improvement-with-RAG-End-to-End-Chatbot-Development.git
 cd LLM-Improvement-with-RAG-End-to-End-Chatbot-Development
-git checkout tool-calling-agents
+git checkout class-07-multi-agent-crewai
 
-# Create conda environment (optional)
-conda create -n langchain-agent python=3.11
-conda activate langchain-agent
+# Create environment
+conda create -n crewai-agents python=3.11
+conda activate crewai-agents
 
 # Install dependencies
 pip install -r requirements.txt
 ```
-
-## Requirements
-
-Key dependencies:
-- `langchain>=1.0.0`
-- `langchain-core`
-- `langchain-community`
-- `langchain-ollama`
-- `langchain-openai`
-- `langchain-chroma`
-- `langchain-experimental`
-- `langgraph`
-- `duckduckgo-search`
-- `chromadb`
-- `streamlit`
 
 ## Usage
 
@@ -154,36 +113,189 @@ Key dependencies:
 # Using Docker
 docker start ollama
 
-# Or native Ollama
+# Or native
 ollama serve
 ```
 
-### 2. Run Agent App
+### 2. Run Streamlit UI
 
 ```bash
-# Using run script
-python run_agent.py
-
-# Or directly with Streamlit
-streamlit run agent_app.py --server.port 8502
+python run_crew.py
+# Access at: http://localhost:8503
 ```
 
-### 3. Run with Options
+### 3. Generate via CLI
 
 ```bash
-# Use different memory type
-python run_agent.py --memory summary
+# Full report
+python run_crew.py --topic "AI in Healthcare" --workflow full_report
 
-# Use Azure OpenAI
-python run_agent.py --provider azure --api-key YOUR_KEY --endpoint YOUR_ENDPOINT
+# Quick report
+python run_crew.py --topic "Machine Learning Basics" --workflow quick_report --style academic
 
-# Check configuration only
-python run_agent.py --check
+# List options
+python run_crew.py --list
 ```
 
-### 4. Access the App
+## Workflows
 
-Open browser: **http://localhost:8502**
+### Full Report Workflow
+```
+Planner -> Researcher -> Writer -> Critic -> Summarizer
+```
+
+### Quick Report Workflow
+```
+Researcher -> Writer
+```
+
+### Research Plan Workflow
+```
+Planner -> Researcher
+```
+
+### Write & Review Workflow
+```
+Writer -> Critic
+```
+
+## Crew Types
+
+| Crew Type | Agents | Description |
+|-----------|--------|-------------|
+| `report_writing` | All 5 agents | Full team for comprehensive reports |
+| `quick_report` | Researcher, Writer | Minimal team for quick output |
+| `research_only` | Planner, Researcher | Focus on research and planning |
+| `review_team` | Writer, Critic | Writing with quality review |
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Streamlit UI (crew_app.py)                │
+│  ┌─────────────────┐  ┌────────────────────────────────┐   │
+│  │ Configuration   │  │      Report Generation         │   │
+│  │ - Crew Type     │  │ - Topic Input                  │   │
+│  │ - Workflow      │  │ - Progress Display             │   │
+│  │ - Style         │  │ - Report Output                │   │
+│  └────────┬────────┘  └───────────────┬────────────────┘   │
+└───────────┼───────────────────────────┼────────────────────┘
+            │                           │
+            └───────────────┬───────────┘
+                            │
+            ┌───────────────▼───────────────┐
+            │   ReportWritingCrew           │
+            │   (crew_main.py)              │
+            └───────────────┬───────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+┌───────▼───────┐  ┌────────▼────────┐  ┌──────▼──────┐
+│ AgentFactory  │  │  TaskFactory    │  │ CrewAI Crew │
+│ (crew_agents) │  │  (crew_tasks)   │  │  Process    │
+└───────┬───────┘  └────────┬────────┘  └──────┬──────┘
+        │                   │                   │
+┌───────▼───────────────────▼───────────────────▼───────┐
+│                    Agents & Tasks                      │
+│  ┌─────────┐ ┌──────────┐ ┌────────┐ ┌────────┐      │
+│  │ Planner │→│Researcher│→│ Writer │→│ Critic │      │
+│  └─────────┘ └──────────┘ └────────┘ └────────┘      │
+│                                              ↓        │
+│                                      ┌───────────┐   │
+│                                      │Summarizer │   │
+│                                      └───────────┘   │
+└───────────────────────────────────────────────────────┘
+```
+
+## Planner-Executor-Critic Model
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                      PLANNING PHASE                       │
+│  ┌─────────┐                                             │
+│  │ Planner │ → Creates outline, identifies research      │
+│  └────┬────┘   areas, sets structure                     │
+│       │                                                   │
+└───────┼──────────────────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────────────────────────┐
+│                     EXECUTION PHASE                       │
+│  ┌──────────┐                                            │
+│  │Researcher│ → Gathers facts, statistics, evidence      │
+│  └────┬─────┘                                            │
+│       ↓                                                   │
+│  ┌────────┐                                              │
+│  │ Writer │ → Composes content following outline         │
+│  └────┬───┘                                              │
+│       │                                                   │
+└───────┼──────────────────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────────────────────────┐
+│                      CRITIQUE PHASE                       │
+│  ┌────────┐                                              │
+│  │ Critic │ → Reviews quality, accuracy, completeness    │
+│  └────┬───┘                                              │
+│       ↓                                                   │
+│  ┌───────────┐                                           │
+│  │Summarizer │ → Creates executive summary               │
+│  └───────────┘                                           │
+│                                                           │
+└──────────────────────────────────────────────────────────┘
+```
+
+## API Reference
+
+### ReportWritingCrew
+
+```python
+crew = ReportWritingCrew(
+    verbose=True,           # Log agent actions
+    process="sequential",   # or "hierarchical"
+    memory=True,            # Enable agent memory
+    output_dir="reports",   # Output directory
+)
+
+crew.setup_crew(crew_type="report_writing")
+
+result = crew.create_report(
+    topic="Report Topic",
+    requirements="Optional requirements",
+    style="professional",
+    word_count=1500,
+    workflow="full_report",
+)
+```
+
+### AgentFactory
+
+```python
+factory = AgentFactory(verbose=True)
+
+# Create all agents
+agents = factory.create_all_agents()
+
+# Create individual agents
+planner = factory.create_planner()
+researcher = factory.create_researcher()
+writer = factory.create_writer()
+critic = factory.create_critic()
+summarizer = factory.create_summarizer()
+```
+
+### TaskFactory
+
+```python
+factory = TaskFactory(agents)
+
+# Full workflow
+tasks = factory.create_report_workflow(topic, requirements, style, word_count)
+
+# Quick workflow
+tasks = factory.create_quick_report_workflow(topic, style)
+
+# Research workflow
+tasks = factory.create_research_workflow(topic, research_areas)
+```
 
 ## Configuration
 
@@ -193,183 +305,106 @@ Edit `config.py` for settings:
 # LLM Provider
 LLM_PROVIDER = "ollama"  # or "azure"
 OLLAMA_MODEL = "qwen2.5:1.5b"
+OLLAMA_BASE_URL = "http://localhost:11434"
 
-# Agent Settings
-AGENT_VERBOSE = True
-AGENT_MAX_ITERATIONS = 10
-
-# Memory Settings
-MEMORY_TYPE = "buffer"
-MEMORY_K = 5
-
-# Tools
-TOOLS_ENABLED = {
-    "calculator": True,
-    "web_search": True,
-    "python_repl": True,
-    "datetime": True,
-    "rag_search": True,
-}
+# Azure (if using)
+AZURE_OPENAI_API_KEY = "your-key"
+AZURE_OPENAI_ENDPOINT = "your-endpoint"
+AZURE_DEPLOYMENT_NAME = "your-deployment"
 ```
 
-## Examples
-
-### Calculator
+## Example Output
 
 ```
-User: What is the square root of 144 plus 10?
-Agent: [Uses calculator tool]
-       sqrt(144) = 12
-       12 + 10 = 22
-       The answer is 22.
+python run_crew.py --topic "Impact of AI on Healthcare" --workflow full_report
+
+============================================================
+Multi-Agent Report Writer - CLI Mode
+============================================================
+
+Topic: Impact of AI on Healthcare
+Workflow: full_report
+Crew: report_writing
+Style: professional
+
+Initializing crew...
+Crew ready with agents: planner, researcher, writer, critic, summarizer
+
+Generating report... This may take a few minutes.
+
+============================================================
+Report Generated Successfully!
+============================================================
+
+Execution Time: 45.23 seconds
+Tasks Completed: 5
+Agents Used: planner, researcher, writer, critic, summarizer
+
+--- REPORT ---
+
+# Impact of AI on Healthcare
+
+## Executive Summary
+...
+
+## Introduction
+...
+
+## Key Findings
+...
+
+## Conclusion
+...
+
+--- END REPORT ---
+
+Report saved to: reports/
 ```
 
-### DateTime
+## Multi-Agent Communication (MCP-Style)
 
-```
-User: What day is it today?
-Agent: [Uses datetime tool]
-       Today is Saturday, January 3, 2026.
-```
-
-### Web Search
-
-```
-User: What is the latest Python version?
-Agent: [Uses web_search tool]
-       Based on my search, Python 3.12 is the latest stable version...
-```
-
-### RAG Search
-
-```
-User: What does the document say about reinforcement learning?
-Agent: [Uses rag_search tool]
-       According to the uploaded documents, reinforcement learning is...
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   Streamlit UI (agent_app.py)               │
-│  ┌─────────────────┐  ┌────────────────────────────────┐   │
-│  │ Sidebar Config  │  │      Chat Interface            │   │
-│  │ - Memory Type   │  │ - Message History              │   │
-│  │ - Tools Toggle  │  │ - Agent Thinking Display       │   │
-│  │ - PDF Upload    │  │ - Tool Call Visualization      │   │
-│  └────────┬────────┘  └───────────────┬────────────────┘   │
-└───────────┼───────────────────────────┼────────────────────┘
-            │                           │
-            └───────────────┬───────────┘
-                            │
-            ┌───────────────▼───────────────┐
-            │   ConversationalAgent         │
-            │   (agent.py)                  │
-            └───────────────┬───────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        │                   │                   │
-┌───────▼───────┐  ┌────────▼────────┐  ┌──────▼──────┐
-│ LangChainAgent│  │ MemoryManager   │  │ ToolFactory │
-│ (ReAct Agent) │  │ (memory_manager)│  │ (tools.py)  │
-└───────┬───────┘  └─────────────────┘  └──────┬──────┘
-        │                                      │
-        │                              ┌───────┴───────┐
-┌───────▼───────┐                      │   Tools       │
-│ LangGraph     │                      ├───────────────┤
-│ create_react  │                      │ Calculator    │
-│ _agent        │                      │ WebSearch     │
-└───────┬───────┘                      │ PythonREPL    │
-        │                              │ DateTime      │
-┌───────▼───────┐                      │ RAGSearch     │
-│ LLM Provider  │                      └───────────────┘
-│ (Ollama/Azure)│
-└───────────────┘
-```
-
-## ReAct Pattern Flow
-
-```
-1. User Question
-        ↓
-2. Agent Thought: "I need to calculate this..."
-        ↓
-3. Action: calculator
-4. Action Input: "25 * 4"
-        ↓
-5. Observation: "100"
-        ↓
-6. Thought: "I now know the answer"
-        ↓
-7. Final Answer: "25 * 4 equals 100"
-```
-
-## API Reference
-
-### create_agent()
+The `MultiAgentOrchestrator` class supports communication between crews:
 
 ```python
-def create_agent(
-    memory_type: str = "buffer",    # buffer, window, vector
-    use_tools: bool = True,         # Enable/disable tools
-    vector_store: Any = None,       # For RAG search
-) -> ConversationalAgent
+from crew_main import MultiAgentOrchestrator
+
+orchestrator = MultiAgentOrchestrator()
+
+# Create multiple crews
+crew1 = orchestrator.create_crew("research_team", crew_type="research_only")
+crew2 = orchestrator.create_crew("writing_team", crew_type="review_team")
+
+# Send messages between crews
+orchestrator.send_message(
+    from_crew="research_team",
+    to_crew="writing_team",
+    message_type="research_complete",
+    content={"findings": "..."}
+)
 ```
-
-### ConversationalAgent
-
-```python
-agent.chat(message: str) -> str
-agent.get_full_response(message: str) -> Dict
-agent.clear_memory() -> None
-agent.get_tools() -> List[str]
-agent.memory_info -> Dict
-```
-
-### MemoryManager
-
-```python
-manager.add_user_message(content: str)
-manager.add_ai_message(content: str)
-manager.get_messages() -> List[BaseMessage]
-manager.clear() -> None
-manager.get_memory_info() -> Dict
-```
-
-## Comparison: RAG Chatbot vs Agent
-
-| Feature | RAG Chatbot | Agent with Tools |
-|---------|-------------|------------------|
-| PDF Q&A | Yes | Yes (via RAG tool) |
-| Calculations | No | Yes |
-| Web Search | No | Yes |
-| Code Execution | No | Yes |
-| Current Time | No | Yes |
-| Memory Types | Buffer only | Multiple |
-| Reasoning | Simple | ReAct pattern |
 
 ## Troubleshooting
 
-### Ollama Connection Error
+### CrewAI Import Error
 ```bash
-# Check if Ollama is running
-docker ps | grep ollama
-# Start if needed
-docker start ollama
+pip install crewai crewai-tools --upgrade
 ```
 
-### Import Errors
+### Ollama Connection Error
 ```bash
-# Reinstall dependencies
-pip install -r requirements.txt
+docker ps | grep ollama
+docker start ollama
 ```
 
 ### Memory Issues
 ```bash
-# Clear memory directory
-rm -rf memoryDB/
+rm -rf reports/
 ```
+
+## Related Classes
+
+- **Class 06**: LangChain Deep Dive (Memory, Tools, Agents)
+- **Class 05**: RAG Chatbot (Document Q&A)
 
 ## License
 
