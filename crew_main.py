@@ -147,13 +147,20 @@ class ReportWritingCrew:
                 word_count=word_count,
             )
 
-        # Create the crew
+        # Create the crew (memory disabled to avoid OpenAI API key requirement)
         self.crew = Crew(
             agents=list(self.agents.values()),
             tasks=tasks,
             process=self.process,
             verbose=self.verbose,
-            memory=self.memory,
+            memory=False,
+            embedder={
+                "provider": "ollama",
+                "config": {
+                    "model": "qwen2.5:1.5b",
+                    "base_url": "http://localhost:11434",
+                }
+            },
         )
 
         # Execute the crew
