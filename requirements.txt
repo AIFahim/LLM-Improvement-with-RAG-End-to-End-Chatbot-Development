@@ -34,3 +34,4 @@ termcolor
 # Multi-Agent Systems (Class 07)
 crewai>=0.86.0
 crewai-tools>=0.17.0
+litellm>=1.55.0
