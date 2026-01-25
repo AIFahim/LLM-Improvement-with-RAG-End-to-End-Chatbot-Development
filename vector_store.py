@@ -4,7 +4,7 @@ Vector store module for managing ChromaDB operations (Fixed version)
 from typing import List, Optional
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
-from langchain.schema import Document
+from langchain_core.documents import Document
 import chromadb
 from chromadb.config import Settings
 import config

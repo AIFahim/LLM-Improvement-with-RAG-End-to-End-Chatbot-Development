@@ -1,6 +1,17 @@
-# RAG Chatbot with Ollama & Azure OpenAI
+# RAG Chatbot with Evaluation, Optimization & Deployment
 
-A modular RAG (Retrieval-Augmented Generation) chatbot that supports both **Ollama** (local) and **Azure OpenAI** (cloud) as LLM providers.
+A production-ready RAG (Retrieval-Augmented Generation) chatbot with **SOTA evaluation**, **monitoring**, and **deployment** capabilities. Supports both **Ollama** (local) and **Azure OpenAI** (cloud) as LLM providers.
+
+## Features
+
+- **RAG Evaluation**: RAGAS metrics (faithfulness, relevancy, context precision)
+- **LLM-as-a-Judge**: G-Eval with Chain-of-Thought scoring
+- **Observability**: Langfuse tracing & Prometheus metrics
+- **Performance**: Response caching, retry logic, circuit breaker
+- **Deployment**: Streamlit UI + FastAPI REST endpoints
+- **Multi-Provider**: Ollama (local) and Azure OpenAI (cloud)
+
+---
 
 ## Quick Start
 
@@ -15,7 +26,16 @@ conda activate rag_chatbot
 pip install -r requirements.txt
 ```
 
-### 2. Setup LLM Provider
+### 2. Configure Environment
+
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your settings (optional - defaults work for Ollama)
+```
+
+### 3. Setup LLM Provider
 
 #### Option A: Ollama (Local - Free)
 
@@ -24,37 +44,172 @@ pip install -r requirements.txt
 docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
 
 # Pull a model
-docker exec ollama ollama pull qwen2.5:1.5b
+docker exec ollama ollama pull llama3.2:1b
 ```
 
 #### Option B: Azure OpenAI (Cloud)
 
-Create a `.env` file:
-```bash
-cp .env.example .env
-```
-
 Edit `.env` with your Azure credentials:
 ```env
+LLM_PROVIDER=azure
 AZURE_OPENAI_API_KEY=your-api-key
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-AZURE_LLM_DEPLOYMENT_NAME=gpt-4
+AZURE_OPENAI_DEPLOYMENT=gpt-4
 ```
 
-### 3. Run the Application
+### 4. Run the Application
 
 ```bash
-# Run with Ollama (default)
+# Run Streamlit app
+streamlit run app.py
+
+# OR run FastAPI server
+uvicorn api:app --reload --port 8000
+
+# OR use the CLI launcher
 python run_app.py
-
-# Run with Azure OpenAI
-python run_app.py --provider azure
-
-# Run with specific options
-python run_app.py --provider ollama --model llama3.2:1b --port 8501
 ```
 
-Open http://localhost:8501 in your browser.
+- Streamlit UI: http://localhost:8501
+- FastAPI docs: http://localhost:8000/docs
+
+---
+
+## Project Structure
+
+```
+.
+├── app.py                 # Streamlit UI with evaluation dashboard
+├── api.py                 # FastAPI REST endpoints
+├── chatbot.py             # Main chatbot orchestrator
+├── config.py              # Configuration with secure API key handling
+├── document_processor.py  # PDF processing module
+├── llm_handler.py         # LLM integration with retries & caching
+├── vector_store.py        # ChromaDB vector store management
+├── evaluator.py           # RAGAS-based evaluation metrics
+├── llm_judge.py           # LLM-as-a-Judge with G-Eval
+├── error_handler.py       # Retry logic & circuit breaker
+├── monitoring.py          # Langfuse & Prometheus metrics
+├── performance.py         # Response caching & optimization
+├── utils.py               # Utility functions
+├── run_app.py             # CLI launcher
+├── .env.example           # Environment template
+├── pdfFiles/              # Directory for uploaded PDFs
+└── vectorDB/              # Directory for vector database
+```
+
+---
+
+## API Endpoints (FastAPI)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chat` | POST | Chat with documents |
+| `/upload` | POST | Upload PDF files |
+| `/evaluate` | POST | Evaluate a response with RAGAS |
+| `/judge` | POST | Judge response with LLM-as-a-Judge |
+| `/compare` | POST | Compare two responses (A/B testing) |
+| `/health` | GET | Health check |
+| `/metrics` | GET | Application metrics (JSON) |
+| `/prometheus` | GET | Prometheus metrics (for Grafana) |
+
+### Example API Usage
+
+```bash
+# Upload a PDF
+curl -X POST http://localhost:8000/upload \
+  -F "files=@document.pdf"
+
+# Chat with documents
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is this document about?", "evaluate": true}'
+
+# Health check
+curl http://localhost:8000/health
+```
+
+---
+
+## Evaluation Features
+
+### RAGAS Metrics
+- **Faithfulness**: Is response factually consistent with context? (0-1)
+- **Answer Relevancy**: Does response address the query? (0-1)
+- **Context Precision**: Are retrieved contexts relevant? (0-1)
+- **Context Recall**: Does context contain required info? (0-1)
+
+### LLM-as-a-Judge (G-Eval)
+- Chain-of-Thought prompting for reliable scoring
+- Multiple criteria: correctness, relevance, coherence, helpfulness
+- Pairwise comparison for A/B testing
+
+### Enable Evaluation
+
+In `.env`:
+```env
+EVALUATION_ENABLED=true
+```
+
+Or toggle in Streamlit sidebar under "Settings".
+
+---
+
+## Monitoring & Observability
+
+### Langfuse (Optional)
+
+Enable tracing in `.env`:
+```env
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=your-public-key
+LANGFUSE_SECRET_KEY=your-secret-key
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+### Prometheus Metrics
+
+Scrape metrics at `/prometheus` endpoint for Grafana dashboards:
+- `chatbot_requests_total` - Total requests by endpoint/status
+- `chatbot_response_latency_seconds` - Response latency histogram
+- `chatbot_errors_total` - Error count by type
+- `chatbot_cache_hits_total` - Cache hit/miss counts
+- `chatbot_evaluation_scores` - Evaluation score distribution
+
+---
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LLM_PROVIDER` | `ollama` | LLM provider: `ollama` or `azure` |
+| `OLLAMA_MODEL` | `llama3.2:1b` | Ollama model name |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
+| `AZURE_OPENAI_API_KEY` | - | Azure API key (required for Azure) |
+| `AZURE_OPENAI_ENDPOINT` | - | Azure endpoint URL (required for Azure) |
+| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4` | Azure deployment name |
+| `EVALUATION_ENABLED` | `false` | Enable response evaluation |
+| `CACHE_ENABLED` | `true` | Enable response caching |
+| `CACHE_TTL_SECONDS` | `3600` | Cache time-to-live |
+| `LANGFUSE_ENABLED` | `false` | Enable Langfuse tracing |
+| `API_PORT` | `8000` | FastAPI port |
+
+---
+
+## Streamlit UI Features
+
+### Tabs
+1. **Chat**: Main chat interface with PDF upload
+2. **Evaluation Dashboard**: Score history, averages, charts
+3. **Metrics**: Cache stats, response times, debug info
+
+### Settings (Sidebar)
+- Enable/disable response evaluation
+- Debug mode toggle
+- Clear chat history
+- Reset chatbot
 
 ---
 
@@ -64,132 +219,12 @@ Open http://localhost:8501 in your browser.
 python run_app.py --help
 ```
 
-| Argument | Short | Default | Description |
-|----------|-------|---------|-------------|
-| `--provider` | `-p` | `ollama` | LLM provider: `ollama` or `azure` |
-| `--model` | `-m` | `qwen2.5:1.5b` | Ollama model name |
-| `--ollama-url` | | `http://localhost:11434` | Ollama base URL |
-| `--api-key` | | from .env | Azure OpenAI API key |
-| `--endpoint` | | from .env | Azure OpenAI endpoint |
-| `--deployment` | `-d` | `gpt-4` | Azure deployment name |
-| `--temperature` | `-t` | `0.7` | LLM temperature |
-| `--port` | | `8501` | Streamlit port |
-| `--check` | | | Validate config only |
-
-### Examples
-
-```bash
-# Check configuration without starting
-python run_app.py --check
-
-# Run with Ollama and specific model
-python run_app.py --provider ollama --model llama3.2:3b
-
-# Run with Azure OpenAI
-python run_app.py --provider azure
-
-# Run with Azure and custom deployment
-python run_app.py --provider azure --deployment gpt-4-turbo
-
-# Run on different port
-python run_app.py --port 8502
-```
-
----
-
-## Project Structure
-
-```
-.
-├── app.py                 # Streamlit UI application
-├── chatbot.py             # Main chatbot orchestrator
-├── config.py              # Configuration settings
-├── document_processor.py  # PDF processing module
-├── llm_handler.py         # LLM integration (Ollama + Azure)
-├── vector_store.py        # ChromaDB vector store management
-├── utils.py               # Utility functions
-├── run_app.py             # CLI launcher with argparse
-├── run.sh                 # Shell script launcher
-├── .env.example           # Environment template
-├── pdfFiles/              # Directory for uploaded PDFs
-└── vectorDB/              # Directory for vector database
-```
-
----
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `LLM_PROVIDER` | `ollama` or `azure` | No (default: ollama) |
-| `OLLAMA_MODEL` | Ollama model name | No |
-| `OLLAMA_BASE_URL` | Ollama API URL | No |
-| `AZURE_OPENAI_API_KEY` | Azure API key | For Azure |
-| `AZURE_OPENAI_ENDPOINT` | Azure endpoint URL | For Azure |
-| `AZURE_LLM_DEPLOYMENT_NAME` | Azure deployment name | For Azure |
-| `AZURE_OPENAI_API_VERSION` | Azure API version | No |
-| `LLM_TEMPERATURE` | Generation temperature | No |
-
-### Supported Ollama Models
-
-```bash
-# Small models (fast, low memory)
-docker exec ollama ollama pull qwen2.5:1.5b
-docker exec ollama ollama pull llama3.2:1b
-docker exec ollama ollama pull phi3:mini
-
-# Medium models (balanced)
-docker exec ollama ollama pull llama3.2:3b
-docker exec ollama ollama pull mistral
-
-# List available models
-docker exec ollama ollama list
-```
-
----
-
-## Module Descriptions
-
-### config.py
-Central configuration with environment variable support for both Ollama and Azure.
-
-### llm_handler.py
-Unified LLM handler supporting:
-- Ollama (local models)
-- Azure OpenAI (cloud models)
-- Provider switching at runtime
-
-### document_processor.py
-PDF processing with:
-- Text extraction
-- Document chunking
-- Multiple file support
-
-### vector_store.py
-ChromaDB vector database:
-- Document embedding (via Ollama)
-- Similarity search
-- Persistent storage
-
-### chatbot.py
-Main orchestrator combining all components.
-
-### app.py
-Streamlit UI with:
-- File upload
-- Chat interface
-- Provider info display
-
----
-
-## Usage
-
-1. Start the application with your preferred provider
-2. Upload PDF files through the sidebar
-3. Click "Process PDFs" to analyze documents
-4. Start asking questions about your documents
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--provider` | `ollama` | LLM provider: `ollama` or `azure` |
+| `--model` | `llama3.2:1b` | Ollama model name |
+| `--port` | `8501` | Streamlit port |
+| `--check` | - | Validate config only |
 
 ---
 
@@ -198,13 +233,16 @@ Streamlit UI with:
 ### Ollama not running
 ```bash
 docker start ollama
-# or
-docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
 ```
 
 ### Model not found
 ```bash
-docker exec ollama ollama pull qwen2.5:1.5b
+docker exec ollama ollama pull llama3.2:1b
+```
+
+### Import errors
+```bash
+pip install -r requirements.txt
 ```
 
 ### Azure authentication error
@@ -212,10 +250,10 @@ docker exec ollama ollama pull qwen2.5:1.5b
 - Check endpoint URL format
 - Confirm deployment name matches Azure portal
 
-### Port already in use
-```bash
-python run_app.py --port 8502
-```
+### Evaluation not working
+- Ensure `EVALUATION_ENABLED=true` in `.env`
+- Or enable via Streamlit sidebar toggle
+- Check Ollama is running (needed for evaluation LLM)
 
 ---
 

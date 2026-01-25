@@ -4,8 +4,8 @@ Document processing module for handling PDF files
 import os
 from typing import List, Optional
 from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 import config
 import logging
 

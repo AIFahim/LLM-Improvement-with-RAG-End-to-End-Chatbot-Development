@@ -4,9 +4,9 @@ Enhanced with retry logic, streaming, caching, and monitoring
 """
 import time
 from typing import Optional, Dict, Any, Generator
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
+from langchain_classic.memory import ConversationBufferMemory
+from langchain_classic.chains import RetrievalQA
+from langchain_core.prompts import PromptTemplate
 from langchain_core.language_models.base import BaseLanguageModel
 import config
 import logging
