@@ -209,27 +209,28 @@ class RAGASEvaluator:
             from datasets import Dataset
             from ragas import evaluate
 
-            # Prepare dataset for RAGAS
+            # Prepare dataset for RAGAS (v0.4+ API)
             data = {
-                "question": [query],
-                "answer": [response],
-                "contexts": [contexts]
+                "user_input": [query],
+                "response": [response],
+                "retrieved_contexts": [contexts]
             }
 
-            # Add ground truth if available (needed for context_recall)
+            # Add reference if ground truth available (needed for context_precision/recall)
             if ground_truth:
-                data["ground_truth"] = [ground_truth]
+                data["reference"] = [ground_truth]
 
             dataset = Dataset.from_dict(data)
 
             # Select metrics based on available data
+            # Note: context_precision and context_recall require 'reference' field
             metrics_to_use = [
                 self._metrics["faithfulness"],
-                self._metrics["answer_relevancy"],
-                self._metrics["context_precision"]
+                self._metrics["answer_relevancy"]
             ]
 
             if ground_truth:
+                metrics_to_use.append(self._metrics["context_precision"])
                 metrics_to_use.append(self._metrics["context_recall"])
 
             # Run evaluation
@@ -240,13 +241,29 @@ class RAGASEvaluator:
                 embeddings=self._embeddings
             )
 
-            # Extract scores
-            result.faithfulness = float(eval_result.get("faithfulness", 0))
-            result.answer_relevancy = float(eval_result.get("answer_relevancy", 0))
-            result.context_precision = float(eval_result.get("context_precision", 0))
-
-            if ground_truth:
-                result.context_recall = float(eval_result.get("context_recall", 0))
+            # Extract scores (handle both dict and EvaluationResult object)
+            if hasattr(eval_result, 'to_pandas'):
+                # New RAGAS API returns EvaluationResult with to_pandas()
+                df = eval_result.to_pandas()
+                result.faithfulness = float(df['faithfulness'].iloc[0]) if 'faithfulness' in df else None
+                result.answer_relevancy = float(df['answer_relevancy'].iloc[0]) if 'answer_relevancy' in df else None
+                if ground_truth:
+                    result.context_precision = float(df['context_precision'].iloc[0]) if 'context_precision' in df else None
+                    result.context_recall = float(df['context_recall'].iloc[0]) if 'context_recall' in df else None
+            elif isinstance(eval_result, dict):
+                # Old RAGAS API returns dict
+                result.faithfulness = float(eval_result.get("faithfulness", 0))
+                result.answer_relevancy = float(eval_result.get("answer_relevancy", 0))
+                if ground_truth:
+                    result.context_precision = float(eval_result.get("context_precision", 0))
+                    result.context_recall = float(eval_result.get("context_recall", 0))
+            else:
+                # Try accessing as attributes
+                result.faithfulness = getattr(eval_result, 'faithfulness', None)
+                result.answer_relevancy = getattr(eval_result, 'answer_relevancy', None)
+                if ground_truth:
+                    result.context_precision = getattr(eval_result, 'context_precision', None)
+                    result.context_recall = getattr(eval_result, 'context_recall', None)
 
             # Compute overall score (weighted average)
             scores = [
