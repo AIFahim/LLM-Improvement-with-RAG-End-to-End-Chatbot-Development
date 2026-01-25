@@ -1,11 +1,57 @@
+# =============================================================================
+# Core Dependencies
+# =============================================================================
 langchain==0.3.11
 langchain-core>=0.3.25
 langchain-community==0.3.11
 langchain-chroma
 langchain-ollama
+langchain-openai  # For Azure OpenAI support
+
+# Vector Database
 chromadb>=1.0.0
+
+# Data Validation
 pydantic>=2.7.4
+pydantic-settings>=2.0
+
+# Web UI
 streamlit>=1.28.0
+
+# PDF Processing
 pypdf>=3.17.0
+
+# HTTP Client
 requests>=2.31.0
+
+# =============================================================================
+# SOTA Evaluation Libraries
+# =============================================================================
+ragas>=0.1.0             # RAG evaluation (industry standard)
+deepeval>=0.21.0         # LLM testing with G-Eval
+datasets>=2.14.0         # Required by RAGAS
+
+# =============================================================================
+# Observability
+# =============================================================================
+langfuse>=2.0.0          # LLM observability (MIT, self-hosted option)
+prometheus-client>=0.19  # Prometheus metrics for Grafana
+
+# =============================================================================
+# Deployment
+# =============================================================================
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# =============================================================================
+# Error Handling & Utilities
+# =============================================================================
+python-dotenv>=1.0.0     # Environment variable management
+tenacity>=8.2.0          # Retry logic with backoff
+cachetools>=5.3.0        # In-memory caching
+
+# =============================================================================
+# Visualization & Utils
+# =============================================================================
 termcolor
+pandas>=2.0.0            # For evaluation charts
