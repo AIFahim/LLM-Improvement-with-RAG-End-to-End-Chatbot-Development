@@ -9,7 +9,7 @@ from vector_store import VectorStoreManager
 from llm_handler import LLMHandler
 from error_handler import error_handler, ErrorType
 from monitoring import langfuse_monitor, prometheus_metrics, debug_tools
-from evaluator import evaluator, EvaluationResult
+from evaluator import evaluator, simple_evaluator, EvaluationResult
 from llm_judge import llm_judge, JudgmentCriteria
 import config
 import logging
@@ -23,12 +23,13 @@ class RAGChatbot:
     Enhanced with evaluation, monitoring, and error handling
     """
 
-    def __init__(self, enable_evaluation: bool = None):
+    def __init__(self, enable_evaluation: bool = None, use_fast_evaluation: bool = False):
         """
         Initialize the RAG chatbot with all components
 
         Args:
             enable_evaluation: Whether to enable response evaluation
+            use_fast_evaluation: Use fast heuristic evaluation instead of RAGAS
         """
         self.document_processor = DocumentProcessor()
         self.vector_store_manager = VectorStoreManager()
@@ -40,6 +41,7 @@ class RAGChatbot:
             enable_evaluation if enable_evaluation is not None
             else config.EVALUATION_ENABLED
         )
+        self._use_fast_evaluation = use_fast_evaluation
         self._last_evaluation: Optional[EvaluationResult] = None
         self._evaluation_history: List[Dict[str, Any]] = []
 
@@ -47,7 +49,8 @@ class RAGChatbot:
         self._session_id = self._generate_session_id()
         self._query_count = 0
 
-        logger.info(f"Initialized RAG Chatbot (evaluation: {self._enable_evaluation})")
+        eval_type = "fast" if use_fast_evaluation else "RAGAS"
+        logger.info(f"Initialized RAG Chatbot (evaluation: {self._enable_evaluation}, type: {eval_type})")
 
     def _generate_session_id(self) -> str:
         """Generate a unique session ID"""
@@ -220,7 +223,7 @@ class RAGChatbot:
         contexts: List[str]
     ) -> Optional[EvaluationResult]:
         """
-        Evaluate a response using RAGAS metrics
+        Evaluate a response using RAGAS metrics or fast heuristics
 
         Args:
             query: User query
@@ -231,7 +234,16 @@ class RAGChatbot:
             EvaluationResult or None if evaluation fails
         """
         try:
-            result = evaluator.evaluate_response(query, response, contexts)
+            # Choose evaluator based on setting
+            eval_to_use = simple_evaluator if self._use_fast_evaluation else evaluator
+            result = eval_to_use.evaluate_response(query, response, contexts)
+
+            # If RAGAS evaluation failed or returned all None, fall back to simple
+            if not self._use_fast_evaluation:
+                if result.error or (result.faithfulness is None and result.answer_relevancy is None):
+                    logger.info("RAGAS evaluation failed, falling back to simple evaluator")
+                    result = simple_evaluator.evaluate_response(query, response, contexts)
+
             self._last_evaluation = result
 
             # Store in history
@@ -252,7 +264,13 @@ class RAGChatbot:
 
         except Exception as e:
             logger.warning(f"Evaluation failed: {e}")
-            return None
+            # Last resort: try simple evaluator
+            try:
+                result = simple_evaluator.evaluate_response(query, response, contexts)
+                self._last_evaluation = result
+                return result
+            except Exception:
+                return None
 
     def judge_response(
         self,
@@ -380,6 +398,17 @@ class RAGChatbot:
         """Set evaluation enabled status"""
         self._enable_evaluation = value
         logger.info(f"Evaluation {'enabled' if value else 'disabled'}")
+
+    @property
+    def fast_evaluation(self) -> bool:
+        """Check if fast evaluation is enabled"""
+        return self._use_fast_evaluation
+
+    @fast_evaluation.setter
+    def fast_evaluation(self, value: bool):
+        """Set fast evaluation mode"""
+        self._use_fast_evaluation = value
+        logger.info(f"Fast evaluation {'enabled' if value else 'disabled (using RAGAS)'}")
 
     @property
     def last_evaluation(self) -> Optional[EvaluationResult]:

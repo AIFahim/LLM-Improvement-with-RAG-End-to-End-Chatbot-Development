@@ -193,7 +193,7 @@ class LLMJudge:
         """Use DeepEval's G-Eval for scoring"""
         try:
             from deepeval.metrics import GEval
-            from deepeval.test_case import LLMTestCase
+            from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
             # Define evaluation criteria and steps
             criteria_configs = {
@@ -251,12 +251,18 @@ class LLMJudge:
 
             config_item = criteria_configs.get(criteria, criteria_configs[JudgmentCriteria.CORRECTNESS])
 
-            # Create G-Eval metric
+            # Create G-Eval metric with required evaluation_params
             metric = GEval(
                 name=config_item["name"],
                 criteria=config_item["criteria"],
                 evaluation_steps=config_item["steps"],
-                model=self._judge_model.get_model_name()
+                evaluation_params=[
+                    LLMTestCaseParams.INPUT,
+                    LLMTestCaseParams.ACTUAL_OUTPUT,
+                    LLMTestCaseParams.CONTEXT
+                ],
+                model=self._judge_model.get_model_name(),
+                async_mode=False  # Use sync mode for Ollama
             )
 
             # Create test case

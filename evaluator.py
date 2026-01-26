@@ -117,12 +117,22 @@ class RAGASEvaluator:
     def _initialize_ragas(self):
         """Initialize RAGAS components"""
         try:
-            from ragas.metrics import (
-                faithfulness,
-                answer_relevancy,
-                context_precision,
-                context_recall
-            )
+            # Try new RAGAS v0.4+ import path first
+            try:
+                from ragas.metrics import (
+                    faithfulness,
+                    answer_relevancy,
+                    context_precision,
+                    context_recall
+                )
+            except ImportError:
+                # Fallback for older versions
+                from ragas.metrics.collections import (
+                    faithfulness,
+                    answer_relevancy,
+                    context_precision,
+                    context_recall
+                )
             from ragas import evaluate
 
             self._metrics = {
@@ -150,10 +160,12 @@ class RAGASEvaluator:
         try:
             from langchain_ollama import OllamaLLM, OllamaEmbeddings
 
+            # Use longer timeout for evaluation tasks
             self._llm = OllamaLLM(
                 model=self.model_name,
                 base_url=config.OLLAMA_BASE_URL,
-                temperature=0.1  # Low temperature for evaluation
+                temperature=0.1,  # Low temperature for evaluation
+                timeout=180  # 3 minute timeout for complex evaluations
             )
 
             self._embeddings = OllamaEmbeddings(
@@ -241,29 +253,50 @@ class RAGASEvaluator:
                 embeddings=self._embeddings
             )
 
-            # Extract scores (handle both dict and EvaluationResult object)
-            if hasattr(eval_result, 'to_pandas'):
-                # New RAGAS API returns EvaluationResult with to_pandas()
-                df = eval_result.to_pandas()
-                result.faithfulness = float(df['faithfulness'].iloc[0]) if 'faithfulness' in df else None
-                result.answer_relevancy = float(df['answer_relevancy'].iloc[0]) if 'answer_relevancy' in df else None
-                if ground_truth:
-                    result.context_precision = float(df['context_precision'].iloc[0]) if 'context_precision' in df else None
-                    result.context_recall = float(df['context_recall'].iloc[0]) if 'context_recall' in df else None
-            elif isinstance(eval_result, dict):
-                # Old RAGAS API returns dict
-                result.faithfulness = float(eval_result.get("faithfulness", 0))
-                result.answer_relevancy = float(eval_result.get("answer_relevancy", 0))
-                if ground_truth:
-                    result.context_precision = float(eval_result.get("context_precision", 0))
-                    result.context_recall = float(eval_result.get("context_recall", 0))
-            else:
-                # Try accessing as attributes
-                result.faithfulness = getattr(eval_result, 'faithfulness', None)
-                result.answer_relevancy = getattr(eval_result, 'answer_relevancy', None)
-                if ground_truth:
-                    result.context_precision = getattr(eval_result, 'context_precision', None)
-                    result.context_recall = getattr(eval_result, 'context_recall', None)
+            # Extract scores from RAGAS EvaluationResult
+            # RAGAS v0.4+ returns EvaluationResult with to_pandas() method
+            try:
+                if hasattr(eval_result, 'to_pandas'):
+                    df = eval_result.to_pandas()
+                    logger.debug(f"RAGAS DataFrame columns: {list(df.columns)}")
+
+                    # Extract scores safely with NaN handling
+                    def safe_extract(col_name):
+                        if col_name in df.columns:
+                            val = df[col_name].iloc[0]
+                            # Handle NaN values
+                            import math
+                            if val is not None and not (isinstance(val, float) and math.isnan(val)):
+                                return float(val)
+                        return None
+
+                    result.faithfulness = safe_extract('faithfulness')
+                    result.answer_relevancy = safe_extract('answer_relevancy')
+                    if ground_truth:
+                        result.context_precision = safe_extract('context_precision')
+                        result.context_recall = safe_extract('context_recall')
+
+                elif isinstance(eval_result, dict):
+                    # Old RAGAS API returns dict
+                    result.faithfulness = float(eval_result.get("faithfulness", 0)) if "faithfulness" in eval_result else None
+                    result.answer_relevancy = float(eval_result.get("answer_relevancy", 0)) if "answer_relevancy" in eval_result else None
+                    if ground_truth:
+                        result.context_precision = float(eval_result.get("context_precision", 0)) if "context_precision" in eval_result else None
+                        result.context_recall = float(eval_result.get("context_recall", 0)) if "context_recall" in eval_result else None
+                else:
+                    # Try accessing scores attribute (some RAGAS versions)
+                    if hasattr(eval_result, 'scores') and isinstance(eval_result.scores, dict):
+                        scores = eval_result.scores
+                        result.faithfulness = scores.get('faithfulness')
+                        result.answer_relevancy = scores.get('answer_relevancy')
+                        if ground_truth:
+                            result.context_precision = scores.get('context_precision')
+                            result.context_recall = scores.get('context_recall')
+                    else:
+                        logger.warning(f"Unknown RAGAS result type: {type(eval_result)}")
+
+            except Exception as extract_error:
+                logger.warning(f"Error extracting RAGAS scores: {extract_error}")
 
             # Compute overall score (weighted average)
             scores = [
@@ -477,13 +510,20 @@ class SimpleEvaluator:
 # =============================================================================
 
 
-def get_evaluator() -> Any:
+def get_evaluator(use_simple: bool = False) -> Any:
     """
     Get the appropriate evaluator based on availability
 
+    Args:
+        use_simple: Force use of SimpleEvaluator (faster, less accurate)
+
     Returns:
-        RAGASEvaluator if available, otherwise SimpleEvaluator
+        RAGASEvaluator if available and not use_simple, otherwise SimpleEvaluator
     """
+    if use_simple:
+        logger.info("Using SimpleEvaluator (requested)")
+        return SimpleEvaluator()
+
     evaluator = RAGASEvaluator()
     if evaluator.is_available:
         return evaluator
@@ -492,5 +532,13 @@ def get_evaluator() -> Any:
     return SimpleEvaluator()
 
 
-# Create a global evaluator instance
+def get_simple_evaluator() -> SimpleEvaluator:
+    """Get the simple heuristic-based evaluator (fast, no LLM required)"""
+    return SimpleEvaluator()
+
+
+# Create a global evaluator instance (RAGAS if available)
 evaluator = get_evaluator()
+
+# Also create a fast evaluator for quick feedback
+simple_evaluator = SimpleEvaluator()

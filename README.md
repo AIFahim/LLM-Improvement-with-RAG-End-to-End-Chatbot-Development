@@ -5,7 +5,8 @@ A production-ready RAG (Retrieval-Augmented Generation) chatbot with **SOTA eval
 ## Features
 
 - **RAG Evaluation**: RAGAS metrics (faithfulness, relevancy, context precision)
-- **LLM-as-a-Judge**: G-Eval with Chain-of-Thought scoring
+- **LLM-as-a-Judge**: G-Eval with Chain-of-Thought scoring + A/B Testing
+- **Fast Evaluation**: Instant heuristic-based scoring (no LLM required)
 - **Observability**: Langfuse tracing & Prometheus metrics
 - **Performance**: Response caching, retry logic, circuit breaker
 - **Deployment**: Streamlit UI + FastAPI REST endpoints
@@ -100,6 +101,59 @@ python run_app.py
 
 ---
 
+## Streamlit UI Features
+
+### 4 Main Tabs
+
+| Tab | Description |
+|-----|-------------|
+| **Chat** | Main chat interface with PDF upload |
+| **Evaluation Dashboard** | RAGAS/Simple evaluation scores, history, charts |
+| **LLM Judge** | Judge history + A/B Testing comparison tool |
+| **Metrics** | Cache stats, response times, debug info |
+
+### Sidebar Settings
+
+| Setting | Description |
+|---------|-------------|
+| **Enable Response Evaluation** | Toggle evaluation on/off |
+| **Use Fast Evaluation** | Switch between instant heuristics vs RAGAS (slower) |
+| **Enable LLM Judge** | Use LLM to judge response quality |
+| **Judge Criteria** | Select: Correctness, Relevance, Coherence, Helpfulness, Completeness |
+| **Debug Mode** | Show response times and technical details |
+
+---
+
+## Evaluation Systems
+
+### 1. Fast Evaluation (Instant)
+Heuristic-based scoring without LLM calls:
+- **Faithfulness**: Word overlap between response and context
+- **Relevancy**: Query-response word matching
+- **Overall Score**: Weighted average
+
+### 2. RAGAS Evaluation (Accurate)
+LLM-based metrics using RAGAS library:
+- **Faithfulness**: Is response factually consistent with context? (0-1)
+- **Answer Relevancy**: Does response address the query? (0-1)
+- **Context Precision**: Are retrieved contexts relevant? (0-1)
+- **Context Recall**: Does context contain required info? (0-1)
+
+### 3. LLM-as-a-Judge (G-Eval)
+Chain-of-Thought prompting for reliable scoring:
+- Multiple criteria: correctness, relevance, coherence, helpfulness, completeness
+- Detailed reasoning for each score
+- Pairwise comparison for A/B testing
+
+### A/B Testing (Response Comparison)
+Compare two responses to the same question:
+1. Go to **LLM Judge** tab
+2. Enter question and two responses
+3. Click "Compare Responses"
+4. See winner, scores, and reasoning
+
+---
+
 ## API Endpoints (FastAPI)
 
 | Endpoint | Method | Description |
@@ -125,47 +179,41 @@ curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"query": "What is this document about?", "evaluate": true}'
 
+# Judge a response
+curl -X POST http://localhost:8000/judge \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is AI?", "response": "AI is artificial intelligence.", "criteria": "correctness"}'
+
+# Compare responses (A/B testing)
+curl -X POST http://localhost:8000/compare \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is AI?", "response_a": "AI is tech.", "response_b": "AI is artificial intelligence that mimics human cognition."}'
+
 # Health check
 curl http://localhost:8000/health
 ```
 
 ---
 
-## Evaluation Features
-
-### RAGAS Metrics
-- **Faithfulness**: Is response factually consistent with context? (0-1)
-- **Answer Relevancy**: Does response address the query? (0-1)
-- **Context Precision**: Are retrieved contexts relevant? (0-1)
-- **Context Recall**: Does context contain required info? (0-1)
-
-### LLM-as-a-Judge (G-Eval)
-- Chain-of-Thought prompting for reliable scoring
-- Multiple criteria: correctness, relevance, coherence, helpfulness
-- Pairwise comparison for A/B testing
-
-### Enable Evaluation
-
-In `.env`:
-```env
-EVALUATION_ENABLED=true
-```
-
-Or toggle in Streamlit sidebar under "Settings".
-
----
-
 ## Monitoring & Observability
 
-### Langfuse (Optional)
+### Langfuse Integration
 
 Enable tracing in `.env`:
 ```env
 LANGFUSE_ENABLED=true
-LANGFUSE_PUBLIC_KEY=your-public-key
-LANGFUSE_SECRET_KEY=your-secret-key
+LANGFUSE_PUBLIC_KEY=pk-lf-your-public-key
+LANGFUSE_SECRET_KEY=sk-lf-your-secret-key
 LANGFUSE_HOST=https://cloud.langfuse.com
 ```
+
+Langfuse tracks:
+- Every chat interaction (query, response, contexts)
+- Evaluation scores (faithfulness, relevancy)
+- Error events
+- Performance timing
+
+View traces at: https://cloud.langfuse.com
 
 ### Prometheus Metrics
 
@@ -195,21 +243,6 @@ Scrape metrics at `/prometheus` endpoint for Grafana dashboards:
 | `CACHE_TTL_SECONDS` | `3600` | Cache time-to-live |
 | `LANGFUSE_ENABLED` | `false` | Enable Langfuse tracing |
 | `API_PORT` | `8000` | FastAPI port |
-
----
-
-## Streamlit UI Features
-
-### Tabs
-1. **Chat**: Main chat interface with PDF upload
-2. **Evaluation Dashboard**: Score history, averages, charts
-3. **Metrics**: Cache stats, response times, debug info
-
-### Settings (Sidebar)
-- Enable/disable response evaluation
-- Debug mode toggle
-- Clear chat history
-- Reset chatbot
 
 ---
 
@@ -253,7 +286,48 @@ pip install -r requirements.txt
 ### Evaluation not working
 - Ensure `EVALUATION_ENABLED=true` in `.env`
 - Or enable via Streamlit sidebar toggle
-- Check Ollama is running (needed for evaluation LLM)
+- Check Ollama is running (needed for RAGAS evaluation)
+
+### LLM Judge slow
+- LLM Judge uses Ollama for evaluation which can be slow
+- Consider using Fast Evaluation for quicker feedback
+- Larger models (llama3.2:3b+) give better judgments but are slower
+
+### A/B Testing not working
+- Ensure Ollama is running
+- Check the LLM Judge tab in Streamlit
+- Works even without PDFs uploaded (uses empty context)
+
+---
+
+## Architecture
+
+```
+User Query
+    │
+    ▼
+┌─────────────────┐
+│   Streamlit UI  │ ◄─── PDF Upload
+│   or FastAPI    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│    Chatbot      │ ◄─── Orchestrates all components
+│  (chatbot.py)   │
+└────────┬────────┘
+         │
+    ┌────┴────┬─────────────┐
+    ▼         ▼             ▼
+┌───────┐ ┌───────┐   ┌──────────┐
+│Vector │ │  LLM  │   │Evaluator │
+│ Store │ │Handler│   │  Suite   │
+└───┬───┘ └───┬───┘   └────┬─────┘
+    │         │            │
+    ▼         ▼            ▼
+ChromaDB   Ollama/    RAGAS + G-Eval
+           Azure      + Simple Eval
+```
 
 ---
 

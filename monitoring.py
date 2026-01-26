@@ -126,13 +126,20 @@ class LangfuseMonitor:
 
         if self.is_enabled:
             try:
-                trace = self._langfuse.trace(
-                    id=trace_id,
+                # Use the newer Langfuse API - create a span as the root trace
+                span_metadata = metadata or {}
+                if session_id:
+                    span_metadata['session_id'] = session_id
+                if user_id:
+                    span_metadata['user_id'] = user_id
+
+                span = self._langfuse.start_span(
                     name=name,
-                    session_id=session_id,
-                    user_id=user_id,
-                    metadata=metadata
+                    metadata=span_metadata
                 )
+                # Store the span for later use
+                self._traces[trace_id].metadata['_span'] = span
+                self._traces[trace_id].metadata['_langfuse_trace_id'] = span.trace_id
                 logger.debug(f"Created Langfuse trace: {trace_id}")
             except Exception as e:
                 logger.error(f"Failed to create Langfuse trace: {e}")
@@ -167,8 +174,13 @@ class LangfuseMonitor:
 
         if self.is_enabled:
             try:
-                self._langfuse.generation(
-                    trace_id=trace_id,
+                # Get the parent span if it exists
+                parent_span = None
+                if trace_id in self._traces:
+                    parent_span = self._traces[trace_id].metadata.get('_span')
+
+                # Create a generation span for the chat response
+                gen = self._langfuse.start_generation(
                     name="chat_response",
                     input=query,
                     output=response,
@@ -178,6 +190,7 @@ class LangfuseMonitor:
                         **(metadata or {})
                     }
                 )
+                gen.end()
             except Exception as e:
                 logger.error(f"Failed to trace chat: {e}")
 
@@ -199,16 +212,15 @@ class LangfuseMonitor:
         """
         if self.is_enabled:
             try:
-                self._langfuse.span(
-                    trace_id=trace_id,
+                span = self._langfuse.start_span(
                     name="retrieval",
                     input=query,
-                    output={"num_documents": len(documents)},
                     metadata={
                         "retrieval_time_ms": retrieval_time_ms,
                         "num_results": len(documents)
                     }
                 )
+                span.end(output={"num_documents": len(documents)})
             except Exception as e:
                 logger.error(f"Failed to trace retrieval: {e}")
 
@@ -225,9 +237,16 @@ class LangfuseMonitor:
 
         if self.is_enabled:
             try:
+                # Get the Langfuse trace ID if available
+                langfuse_trace_id = trace_id
+                if trace_id in self._traces:
+                    langfuse_trace_id = self._traces[trace_id].metadata.get(
+                        '_langfuse_trace_id', trace_id
+                    )
+
                 for name, value in scores.items():
-                    self._langfuse.score(
-                        trace_id=trace_id,
+                    self._langfuse.create_score(
+                        trace_id=langfuse_trace_id,
                         name=name,
                         value=value
                     )
@@ -249,8 +268,7 @@ class LangfuseMonitor:
 
         if self.is_enabled:
             try:
-                self._langfuse.event(
-                    trace_id=trace_id,
+                self._langfuse.create_event(
                     name=error_type,
                     metadata={"error": error}
                 )

@@ -1,12 +1,13 @@
 """
 Streamlit application for the RAG Chatbot
-Enhanced with evaluation UI, metrics dashboard, and debug mode
+Enhanced with evaluation UI, metrics dashboard, LLM Judge, and debug mode
 """
 import streamlit as st
 import logging
 import time
 from chatbot import RAGChatbot
 from evaluator import EvaluationResult
+from llm_judge import llm_judge, JudgmentCriteria
 import config
 import utils
 
@@ -18,8 +19,9 @@ logger = logging.getLogger(__name__)
 def initialize_session_state():
     """Initialize Streamlit session state variables"""
     if 'chatbot' not in st.session_state:
-        st.session_state.chatbot = RAGChatbot()
-        logger.info("Initialized new chatbot instance")
+        # Default to fast evaluation for better UX (RAGAS can be slow)
+        st.session_state.chatbot = RAGChatbot(use_fast_evaluation=True)
+        logger.info("Initialized new chatbot instance with fast evaluation")
 
     if config.SESSION_MESSAGES not in st.session_state:
         st.session_state[config.SESSION_MESSAGES] = []
@@ -30,8 +32,20 @@ def initialize_session_state():
     if config.SESSION_DEBUG_MODE not in st.session_state:
         st.session_state[config.SESSION_DEBUG_MODE] = False
 
+    if 'fast_evaluation' not in st.session_state:
+        st.session_state.fast_evaluation = True  # Default to fast evaluation for better UX
+
+    if 'llm_judge_enabled' not in st.session_state:
+        st.session_state.llm_judge_enabled = False  # LLM Judge off by default (slow)
+
+    if 'judge_criteria' not in st.session_state:
+        st.session_state.judge_criteria = "correctness"
+
     if 'evaluation_results' not in st.session_state:
         st.session_state.evaluation_results = []
+
+    if 'judge_history' not in st.session_state:
+        st.session_state.judge_history = []
 
 
 def display_chat_messages():
@@ -43,6 +57,10 @@ def display_chat_messages():
             # Display evaluation if available
             if message.get("evaluation") and st.session_state[config.SESSION_EVALUATION_ENABLED]:
                 display_inline_evaluation(message["evaluation"])
+
+            # Display LLM Judge result if available
+            if message.get("judge_result"):
+                display_llm_judge_result(message["judge_result"])
 
 
 def display_inline_evaluation(evaluation: dict):
@@ -71,6 +89,36 @@ def display_inline_evaluation(evaluation: dict):
                     color = "red"
 
                 col.metric(label, f"{score:.2f}")
+
+
+def display_llm_judge_result(judge_result: dict):
+    """Display LLM Judge result inline with the message"""
+    if not judge_result:
+        return
+
+    with st.expander("LLM Judge Result", expanded=False):
+        score = judge_result.get("score")
+        reason = judge_result.get("reason", "No reason provided")
+        criteria = judge_result.get("criteria", "unknown")
+
+        # Display score with color
+        if score is not None:
+            col1, col2 = st.columns([1, 3])
+
+            with col1:
+                if score >= 0.7:
+                    st.success(f"Score: {score:.2f}")
+                elif score >= 0.4:
+                    st.warning(f"Score: {score:.2f}")
+                else:
+                    st.error(f"Score: {score:.2f}")
+
+            with col2:
+                st.caption(f"Criteria: {criteria.title()}")
+
+        # Display reasoning
+        st.markdown("**Reasoning:**")
+        st.markdown(f"_{reason}_")
 
 
 def display_evaluation_dashboard():
@@ -134,6 +182,111 @@ def display_evaluation_dashboard():
                 st.write(f"**Relevancy:** {eval_item.get('relevancy', 'N/A')}")
     else:
         st.info("No evaluations yet. Enable evaluation and ask some questions!")
+
+
+def display_llm_judge_dashboard():
+    """Display LLM Judge dashboard with history and comparison tool"""
+    st.header("LLM-as-a-Judge Dashboard")
+
+    # Judge history summary
+    judge_history = st.session_state.judge_history
+
+    if judge_history:
+        st.subheader("Judge History")
+
+        # Summary metrics
+        col1, col2, col3 = st.columns(3)
+
+        total_judgments = len(judge_history)
+        scores = [j.get("score") for j in judge_history if j.get("score") is not None]
+        avg_score = sum(scores) / len(scores) if scores else None
+
+        col1.metric("Total Judgments", total_judgments)
+        col2.metric("Avg Score", f"{avg_score:.2f}" if avg_score else "N/A")
+        col3.metric("Latest Criteria", judge_history[-1].get("criteria", "N/A").title() if judge_history else "N/A")
+
+        # Score chart
+        if len(scores) > 1:
+            import pandas as pd
+            chart_data = pd.DataFrame({
+                "Judgment #": list(range(1, len(scores) + 1)),
+                "Score": scores
+            })
+            chart_data = chart_data.set_index("Judgment #")
+            st.line_chart(chart_data)
+
+        # Recent judgments
+        st.subheader("Recent Judgments")
+        for i, judgment in enumerate(reversed(judge_history[-5:])):
+            with st.expander(f"Query: {judgment.get('query', 'N/A')[:40]}..."):
+                st.write(f"**Score:** {judgment.get('score', 'N/A')}")
+                st.write(f"**Criteria:** {judgment.get('criteria', 'N/A').title()}")
+    else:
+        st.info("No LLM Judge results yet. Enable LLM Judge in the sidebar and ask questions!")
+
+    # Response Comparison Tool
+    st.divider()
+    st.subheader("Compare Responses (A/B Testing)")
+    st.caption("Compare two different responses to the same question")
+
+    with st.form("compare_responses"):
+        question = st.text_input(
+            "Question",
+            placeholder="Enter the question to compare responses for..."
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            response_a = st.text_area(
+                "Response A",
+                placeholder="Enter first response...",
+                height=150
+            )
+
+        with col2:
+            response_b = st.text_area(
+                "Response B",
+                placeholder="Enter second response...",
+                height=150
+            )
+
+        submit = st.form_submit_button("Compare Responses", type="primary")
+
+        if submit and question and response_a and response_b:
+            with st.spinner("Comparing responses with LLM Judge..."):
+                try:
+                    result = st.session_state.chatbot.compare_responses(
+                        question, response_a, response_b
+                    )
+
+                    st.success("Comparison complete!")
+
+                    # Display results
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        st.metric("Response A Score", f"{result.get('score_a', 'N/A')}")
+
+                    with col2:
+                        winner = result.get("winner", "tie")
+                        if winner == "A":
+                            st.success("Winner: Response A")
+                        elif winner == "B":
+                            st.success("Winner: Response B")
+                        else:
+                            st.info("Result: Tie")
+
+                    with col3:
+                        st.metric("Response B Score", f"{result.get('score_b', 'N/A')}")
+
+                    # Reasoning
+                    st.markdown("**Reasoning:**")
+                    st.markdown(f"_{result.get('reason', 'No reason provided')}_")
+
+                except Exception as e:
+                    st.error(f"Comparison failed: {e}")
+                    logger.error(f"Response comparison error: {e}")
 
 
 def display_metrics_dashboard():
@@ -209,9 +362,10 @@ def main():
     initialize_session_state()
 
     # Create tabs for main app and dashboards
-    tab_chat, tab_eval, tab_metrics = st.tabs([
+    tab_chat, tab_eval, tab_judge, tab_metrics = st.tabs([
         "Chat",
         "Evaluation Dashboard",
+        "LLM Judge",
         "Metrics"
     ])
 
@@ -264,10 +418,55 @@ def main():
             eval_enabled = st.checkbox(
                 "Enable Response Evaluation",
                 value=st.session_state[config.SESSION_EVALUATION_ENABLED],
-                help="Evaluate responses using RAGAS metrics"
+                help="Evaluate responses using evaluation metrics"
             )
             st.session_state[config.SESSION_EVALUATION_ENABLED] = eval_enabled
             st.session_state.chatbot.evaluation_enabled = eval_enabled
+
+            # Fast evaluation toggle (only show when evaluation is enabled)
+            if eval_enabled:
+                fast_eval = st.checkbox(
+                    "Use Fast Evaluation",
+                    value=st.session_state.fast_evaluation,
+                    help="Fast heuristic-based evaluation (instant) vs RAGAS (slower but more accurate)"
+                )
+                st.session_state.fast_evaluation = fast_eval
+                st.session_state.chatbot.fast_evaluation = fast_eval
+
+                if fast_eval:
+                    st.caption("Using fast heuristic evaluation")
+                else:
+                    st.caption("Using RAGAS evaluation (may be slow)")
+
+            # LLM Judge toggle
+            st.divider()
+            st.subheader("LLM-as-a-Judge")
+
+            llm_judge_enabled = st.checkbox(
+                "Enable LLM Judge",
+                value=st.session_state.llm_judge_enabled,
+                help="Use LLM to judge response quality with Chain-of-Thought reasoning"
+            )
+            st.session_state.llm_judge_enabled = llm_judge_enabled
+
+            if llm_judge_enabled:
+                # Criteria selection
+                criteria_options = {
+                    "correctness": "Correctness - Is the answer factually correct?",
+                    "relevance": "Relevance - Does it answer the question?",
+                    "coherence": "Coherence - Is it well-structured?",
+                    "helpfulness": "Helpfulness - Is it useful to the user?",
+                    "completeness": "Completeness - Does it fully address the query?"
+                }
+
+                selected_criteria = st.selectbox(
+                    "Judge Criteria",
+                    options=list(criteria_options.keys()),
+                    format_func=lambda x: criteria_options[x],
+                    index=list(criteria_options.keys()).index(st.session_state.judge_criteria)
+                )
+                st.session_state.judge_criteria = selected_criteria
+                st.caption("LLM Judge uses Ollama for evaluation (may be slow)")
 
             # Debug mode toggle
             debug_mode = st.checkbox(
@@ -361,6 +560,49 @@ def main():
                                 }
                                 display_inline_evaluation(evaluation_dict)
 
+                            # Run LLM Judge if enabled
+                            judge_result = None
+                            if st.session_state.llm_judge_enabled:
+                                with st.spinner("Running LLM Judge..."):
+                                    try:
+                                        # Get contexts
+                                        contexts = [
+                                            doc.page_content
+                                            for doc in response.get("source_documents", [])
+                                        ]
+
+                                        # Map criteria string to enum
+                                        criteria_map = {
+                                            "correctness": JudgmentCriteria.CORRECTNESS,
+                                            "relevance": JudgmentCriteria.RELEVANCE,
+                                            "coherence": JudgmentCriteria.COHERENCE,
+                                            "helpfulness": JudgmentCriteria.HELPFULNESS,
+                                            "completeness": JudgmentCriteria.COMPLETENESS
+                                        }
+                                        criteria = criteria_map.get(
+                                            st.session_state.judge_criteria,
+                                            JudgmentCriteria.CORRECTNESS
+                                        )
+
+                                        # Run judge
+                                        judge_result = st.session_state.chatbot.judge_response(
+                                            prompt, answer, contexts, criteria
+                                        )
+
+                                        # Store in history
+                                        st.session_state.judge_history.append({
+                                            "query": prompt[:100],
+                                            "score": judge_result.get("score"),
+                                            "criteria": judge_result.get("criteria"),
+                                            "timestamp": time.time()
+                                        })
+
+                                    except Exception as e:
+                                        logger.error(f"LLM Judge error: {e}")
+                                        judge_result = {"score": None, "reason": str(e)}
+
+                                display_llm_judge_result(judge_result)
+
                             # Show sources if available
                             if response.get('source_documents'):
                                 with st.expander("Sources"):
@@ -375,6 +617,9 @@ def main():
 
                             if response.get('evaluation'):
                                 message_data["evaluation"] = evaluation_dict
+
+                            if judge_result:
+                                message_data["judge_result"] = judge_result
 
                             st.session_state[config.SESSION_MESSAGES].append(message_data)
 
@@ -409,6 +654,10 @@ def main():
     # Evaluation Dashboard Tab
     with tab_eval:
         display_evaluation_dashboard()
+
+    # LLM Judge Tab
+    with tab_judge:
+        display_llm_judge_dashboard()
 
     # Metrics Tab
     with tab_metrics:
