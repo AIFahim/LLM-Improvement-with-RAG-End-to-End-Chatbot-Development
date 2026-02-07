@@ -45,8 +45,8 @@ cp .env.example .env
 # Start Ollama with Docker
 docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
 
-# Pull a model
-docker exec ollama ollama pull llama3.2:1b
+# Pull the agent model (with tool calling support)
+docker exec ollama ollama pull qwen2.5:3b
 ```
 
 #### Option B: Azure OpenAI (Cloud)
@@ -247,7 +247,7 @@ Scrape metrics at `/prometheus` endpoint for Grafana dashboards:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LLM_PROVIDER` | `ollama` | LLM provider: `ollama` or `azure` |
-| `OLLAMA_MODEL` | `llama3.2:1b` | Ollama model name |
+| `OLLAMA_MODEL` | `qwen2.5:3b` | Ollama model name (needs tool calling support) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL |
 | `AZURE_OPENAI_API_KEY` | - | Azure API key (required for Azure) |
 | `AZURE_OPENAI_ENDPOINT` | - | Azure endpoint URL (required for Azure) |
@@ -269,7 +269,7 @@ python run_app.py --help
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--provider` | `ollama` | LLM provider: `ollama` or `azure` |
-| `--model` | `llama3.2:1b` | Ollama model name |
+| `--model` | `qwen2.5:3b` | Ollama model name |
 | `--port` | `8501` | Streamlit port |
 | `--check` | - | Validate config only |
 
@@ -284,7 +284,7 @@ docker start ollama
 
 ### Model not found
 ```bash
-docker exec ollama ollama pull llama3.2:1b
+docker exec ollama ollama pull qwen2.5:3b
 ```
 
 ### Import errors
@@ -318,13 +318,35 @@ pip install -r requirements.txt
 
 ### Overview
 
-Class 11 adds **multimodal capabilities** to the RAG chatbot: a Voice Assistant Agent that can interact with images and text using vision models (LLaVA via Ollama) and voice (Whisper STT + gTTS).
+Class 11 adds **multimodal capabilities** to the RAG chatbot: a Voice Assistant Agent that can interact with images and text using vision models via Ollama and voice (Whisper STT + gTTS/Orpheus TTS), powered by a LangGraph ReAct agent with tool calling.
 
-### Additional Setup
+### Models Used
 
-#### 1. Install ffmpeg (required by Whisper)
+| Role | Model | Size | Purpose |
+|------|-------|------|---------|
+| **Agent LLM** | `qwen2.5:3b` | ~2 GB | Chat + tool calling (calculator, web search, datetime, RAG, etc.) |
+| **Vision** | `moondream` | ~1.7 GB | Image analysis and visual Q&A |
+| **TTS (Orpheus)** | `legraphista/Orpheus:3b-ft-q4_k_m` | ~2.4 GB | Natural speech synthesis via Ollama (optional) |
+
+### Full Setup (Step by Step)
+
+#### 1. Create & activate environment
 
 ```bash
+conda create -n rag_chatbot python=3.11 -y
+conda activate rag_chatbot
+```
+
+#### 2. Install Python dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+#### 3. Install system dependencies
+
+```bash
+# ffmpeg is required by Whisper for audio processing
 # Ubuntu/Debian
 sudo apt install ffmpeg
 
@@ -335,40 +357,86 @@ brew install ffmpeg
 choco install ffmpeg
 ```
 
-#### 2. Pull the LLaVA Vision Model
+#### 4. Start Ollama
 
 ```bash
-ollama pull llava:7b
+# Option A: Docker (recommended)
+docker run -d --name ollama -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
 
-# Verify
-ollama list
+# Option B: Native install (https://ollama.com)
+ollama serve
 ```
 
-#### 3. Run the Multimodal App
+#### 5. Pull required models
+
+```bash
+# Agent LLM (required) - tool calling support
+docker exec ollama ollama pull qwen2.5:3b
+
+# Vision model (required for image analysis)
+docker exec ollama ollama pull moondream
+
+# Orpheus TTS (optional - for natural voice synthesis)
+docker exec ollama ollama pull legraphista/Orpheus:3b-ft-q4_k_m
+
+# Verify all models are downloaded
+docker exec ollama ollama list
+```
+
+> **Note:** If running Ollama natively (not Docker), omit `docker exec ollama` from the commands above.
+
+#### 6. Configure environment
+
+```bash
+cp .env.example .env
+# Edit .env if needed (defaults work for local Ollama setup)
+```
+
+#### 7. Run the Multimodal App
 
 ```bash
 streamlit run multimodal_app.py
 ```
 
+Open **http://localhost:8501** in your browser.
+
 ### Multimodal App Tabs
 
 | Tab | Description |
 |-----|-------------|
-| **Multimodal Chat** | Chat with text, images, and voice input |
-| **Vision Studio** | Upload and analyze images with LLaVA |
-| **Voice Lab** | Test STT (Whisper) and TTS (gTTS) |
-| **Agent Info** | View tools, config, model status |
+| **Multimodal Chat** | ChatGPT-style chat with inline image upload, voice recording, and text input |
+| **Vision Studio** | Upload images and analyze them with custom prompts |
+| **Voice Lab** | Test STT (Whisper) and TTS (gTTS / pyttsx3 / Orpheus) with engine selector |
+| **Agent Info** | View tools, config, model status, memory info |
+
+### Available Tools (via LangGraph ReAct Agent)
+
+| Tool | Description |
+|------|-------------|
+| `calculator` | Math expressions |
+| `web_search` | DuckDuckGo web search |
+| `python_repl` | Execute Python code |
+| `datetime` | Current date/time |
+| `rag_search` | Search uploaded PDFs |
+| `image_analysis` | Analyze images with vision model |
+| `image_question` | Visual Q&A on images |
+| `voice_transcription` | Transcribe audio to text |
+| `text_to_speech` | Convert text to speech |
+| `image_to_rag` | Analyze image and store description in vector DB |
 
 ### Multimodal Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `OLLAMA_MODEL` | `qwen2.5:3b` | Agent LLM model (needs tool calling support) |
 | `VISION_ENABLED` | `true` | Enable vision capabilities |
-| `VISION_MODEL` | `llava:7b` | Ollama vision model |
+| `VISION_MODEL` | `moondream` | Ollama vision model |
 | `VOICE_ENABLED` | `true` | Enable voice capabilities |
 | `STT_ENGINE` | `whisper` | STT backend (`whisper` or `google`) |
 | `WHISPER_MODEL_SIZE` | `base` | Whisper model size (`tiny`, `base`, `small`, `medium`, `large`) |
-| `TTS_ENGINE` | `gtts` | TTS backend (`gtts` or `pyttsx3`) |
+| `TTS_ENGINE` | `gtts` | TTS backend (`gtts`, `pyttsx3`, or `orpheus`) |
+| `ORPHEUS_MODEL` | `legraphista/Orpheus` | Orpheus TTS model for Ollama |
+| `ORPHEUS_VOICE` | `tara` | Orpheus voice (`tara`, `leah`, `jess`, `leo`, `dan`, `mia`, `zac`, `zoe`) |
 | `MULTIMODAL_MODE` | `full` | Agent mode (`full`, `text`, `vision`, `voice`) |
 | `MULTIMODAL_AUTO_TTS` | `false` | Auto-generate speech for responses |
 
@@ -378,32 +446,42 @@ streamlit run multimodal_app.py
 User Input (Text / Image / Audio)
     │
     ▼
-┌──────────────────────┐
-│  Multimodal App (UI) │ ◄─── Streamlit (4 tabs)
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│  MultimodalAgent     │ ◄─── Orchestrates all modalities
-│  (LangGraph ReAct)   │
-└──────────┬───────────┘
-           │
-    ┌──────┼──────┬──────────┐
-    ▼      ▼      ▼          ▼
-┌──────┐┌─────┐┌──────┐┌────────┐
-│Vision││Voice││Tools ││ Memory │
-│(LLaVA)│(Whisper)│(5+5) ││(Buffer)│
-└──┬───┘└──┬──┘└──┬───┘└────────┘
-   ▼       ▼      ▼
- Ollama  ffmpeg  DuckDuckGo/
-                 ChromaDB/etc.
+┌──────────────────────────┐
+│   Multimodal App (UI)    │ ◄─── Streamlit (4 tabs)
+│   multimodal_app.py      │      ChatGPT-style chat
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│   MultimodalAgent        │ ◄─── Orchestrates all modalities
+│   (LangGraph ReAct)      │      qwen2.5:3b with tool calling
+└────────────┬─────────────┘
+             │
+    ┌────────┼────────┬───────────┐
+    ▼        ▼        ▼           ▼
+┌────────┐┌───────┐┌───────┐┌────────┐
+│ Vision ││ Voice ││ Tools ││ Memory │
+│moondream││Whisper││ 5+5  ││ Buffer │
+│        ││gTTS   ││      ││        │
+│        ││Orpheus││      ││        │
+└───┬────┘└───┬───┘└───┬───┘└────────┘
+    ▼         ▼        ▼
+  Ollama   ffmpeg   DuckDuckGo/
+  Vision   + SNAC   ChromaDB/etc.
 ```
 
 ### Troubleshooting (Multimodal)
 
-#### LLaVA model not found
+#### Vision model not found
 ```bash
-ollama pull llava:7b
+docker exec ollama ollama pull moondream
+```
+
+#### Agent not using tools / outputting raw JSON
+Your agent LLM may be too small. Use a 3B+ model with tool calling support:
+```bash
+docker exec ollama ollama pull qwen2.5:3b
+# Then set OLLAMA_MODEL=qwen2.5:3b in .env
 ```
 
 #### Whisper import error
@@ -416,12 +494,24 @@ Whisper requires ffmpeg for audio processing. Install it for your OS (see setup 
 
 #### TTS not working
 ```bash
-# Try gTTS (requires internet)
+# gTTS (requires internet)
 pip install gTTS
 
-# Or use offline fallback
+# Offline fallback
 pip install pyttsx3
+
+# Orpheus (via Ollama - natural voice)
+docker exec ollama ollama pull legraphista/Orpheus:3b-ft-q4_k_m
 ```
+
+#### OOM (Out of Memory) with Orpheus TTS
+If Orpheus gets killed, your system may not have enough RAM. Use gTTS or pyttsx3 instead:
+```env
+TTS_ENGINE=gtts
+```
+
+#### Image persisting across messages
+Clear chat history using the "Clear Chat History" button in the sidebar.
 
 ---
 
