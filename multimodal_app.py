@@ -121,60 +121,24 @@ def display_multimodal_chat():
                             for tc in msg["tool_calls"]:
                                 st.code(json.dumps(tc, indent=2, default=str), language="json")
 
-    # --- Attachment bar (compact, above chat input) ---
-    attach_col1, attach_col2 = st.columns([1, 1])
-
-    with attach_col1:
-        uploaded_image = st.file_uploader(
-            "Attach image",
-            type=list(config.VISION_SUPPORTED_FORMATS),
-            key="chat_image_upload",
-            label_visibility="collapsed",
-        )
-        # Only store if this is a NEW upload (not the same file persisting after send)
-        if uploaded_image is not None:
-            img_id = id(uploaded_image) if not hasattr(uploaded_image, 'file_id') else uploaded_image.file_id
-            # Use file name + size as a stable identifier
-            img_key = f"{uploaded_image.name}_{uploaded_image.size}"
-            if img_key != st.session_state.sent_image_id:
-                uploaded_image.seek(0)
-                st.session_state.pending_image_bytes = uploaded_image.getvalue()
-                uploaded_image.seek(0)
-                st.session_state.pending_image = uploaded_image
-
-    with attach_col2:
-        audio_input = st.audio_input(
-            "Voice",
-            key="chat_audio_input",
-            label_visibility="collapsed",
-        )
-        if audio_input is not None:
-            audio_key = f"audio_{audio_input.size}"
-            if audio_key != st.session_state.sent_audio_id:
-                audio_input.seek(0)
-                st.session_state.pending_audio = audio_input.read()
-                audio_input.seek(0)
-
-    # Show attachment preview + Send button
+    # Show pending attachment indicator above chat input
     has_pending_image = st.session_state.pending_image_bytes is not None
     has_pending_audio = st.session_state.pending_audio is not None
     send_attachments = False
 
     if has_pending_image or has_pending_audio:
-        preview_col, send_col = st.columns([3, 1])
-        with preview_col:
-            previews = []
-            if has_pending_image:
-                previews.append("image")
-            if has_pending_audio:
-                previews.append("voice")
-            st.caption(f"Attached: {', '.join(previews)} -- type a message below or click Send")
-            if has_pending_image:
-                st.image(st.session_state.pending_image_bytes, width=150)
+        previews = []
+        if has_pending_image:
+            previews.append("image")
+        if has_pending_audio:
+            previews.append("voice")
+        attach_col, send_col = st.columns([4, 1])
+        with attach_col:
+            st.info(f"Attached: {', '.join(previews)} — type a message or click Send")
         with send_col:
             send_attachments = st.button("Send", type="primary", key="send_attachments_btn")
 
-    # Chat input (for text messages)
+    # Chat input pinned to bottom by Streamlit
     user_text = st.chat_input("Message...")
 
     # --- Determine if we should process ---
@@ -552,6 +516,33 @@ def display_sidebar():
         if auto_tts != st.session_state.mm_auto_tts:
             st.session_state.mm_auto_tts = auto_tts
             st.session_state.multimodal_agent.auto_tts = auto_tts
+
+        st.divider()
+
+        # --- Attachments for Multimodal Chat ---
+        st.subheader("Attachments")
+
+        uploaded_image = st.file_uploader(
+            "Attach Image",
+            type=list(config.VISION_SUPPORTED_FORMATS),
+            key="chat_image_upload",
+        )
+        if uploaded_image is not None:
+            img_key = f"{uploaded_image.name}_{uploaded_image.size}"
+            if img_key != st.session_state.sent_image_id:
+                uploaded_image.seek(0)
+                st.session_state.pending_image_bytes = uploaded_image.getvalue()
+                uploaded_image.seek(0)
+                st.session_state.pending_image = uploaded_image
+                st.image(st.session_state.pending_image_bytes, width=150, caption="Pending")
+
+        audio_input = st.audio_input("Record Voice", key="chat_audio_input")
+        if audio_input is not None:
+            audio_key = f"audio_{audio_input.size}"
+            if audio_key != st.session_state.sent_audio_id:
+                audio_input.seek(0)
+                st.session_state.pending_audio = audio_input.read()
+                audio_input.seek(0)
 
         st.divider()
 
