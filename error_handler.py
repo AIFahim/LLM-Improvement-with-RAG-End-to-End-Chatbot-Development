@@ -28,6 +28,8 @@ class ErrorType(Enum):
     INVALID_REQUEST = "invalid_request"
     MODEL_ERROR = "model_error"
     RETRIEVAL_ERROR = "retrieval_error"
+    VISION_ERROR = "vision_error"
+    AUDIO_ERROR = "audio_error"
     UNKNOWN = "unknown"
 
 
@@ -347,6 +349,10 @@ class SelfReflector:
             return ErrorType.MODEL_ERROR
         elif "retrieval" in error_str or "vector" in error_str:
             return ErrorType.RETRIEVAL_ERROR
+        elif "vision" in error_str or "image" in error_str or "llava" in error_str:
+            return ErrorType.VISION_ERROR
+        elif "audio" in error_str or "whisper" in error_str or "transcri" in error_str:
+            return ErrorType.AUDIO_ERROR
         else:
             return ErrorType.UNKNOWN
 
@@ -403,6 +409,16 @@ class SelfReflector:
                 error_analysis="Document retrieval failed",
                 suggested_fix="Check vector store connection and data availability",
                 should_retry=True
+            ),
+            ErrorType.VISION_ERROR: ReflectionResult(
+                error_analysis="Vision model processing failed",
+                suggested_fix="Check that LLaVA model is pulled in Ollama and image format is supported",
+                should_retry=True
+            ),
+            ErrorType.AUDIO_ERROR: ReflectionResult(
+                error_analysis="Audio processing failed",
+                suggested_fix="Check audio format, file size, and that ffmpeg is installed",
+                should_retry=False
             ),
             ErrorType.UNKNOWN: ReflectionResult(
                 error_analysis=f"Unknown error: {str(error)}",

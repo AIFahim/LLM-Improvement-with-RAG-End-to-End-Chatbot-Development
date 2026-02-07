@@ -1,9 +1,10 @@
-# RAG Chatbot with Evaluation, Optimization & Deployment
+# RAG Chatbot with Multimodal Agents, Evaluation & Deployment
 
-A production-ready RAG (Retrieval-Augmented Generation) chatbot with **SOTA evaluation**, **monitoring**, and **deployment** capabilities. Supports both **Ollama** (local) and **Azure OpenAI** (cloud) as LLM providers.
+A production-ready RAG (Retrieval-Augmented Generation) chatbot with **multimodal capabilities**, **SOTA evaluation**, **monitoring**, and **deployment**. Supports both **Ollama** (local) and **Azure OpenAI** (cloud) as LLM providers.
 
 ## Features
 
+- **Multimodal Agent** (Class 11): Vision (LLaVA), Voice (Whisper + gTTS), LangGraph ReAct agent
 - **RAG Evaluation**: RAGAS metrics (faithfulness, relevancy, context precision)
 - **LLM-as-a-Judge**: G-Eval with Chain-of-Thought scoring + A/B Testing
 - **Fast Evaluation**: Instant heuristic-based scoring (no LLM required)
@@ -61,8 +62,11 @@ AZURE_OPENAI_DEPLOYMENT=gpt-4
 ### 4. Run the Application
 
 ```bash
-# Run Streamlit app
+# Run Streamlit app (evaluation dashboard)
 streamlit run app.py
+
+# Run Multimodal Agent app (Class 11)
+streamlit run multimodal_app.py
 
 # OR run FastAPI server
 uvicorn api:app --reload --port 8000
@@ -81,6 +85,7 @@ python run_app.py
 ```
 .
 ├── app.py                 # Streamlit UI with evaluation dashboard
+├── multimodal_app.py      # Streamlit UI for multimodal agent (Class 11)
 ├── api.py                 # FastAPI REST endpoints
 ├── chatbot.py             # Main chatbot orchestrator
 ├── config.py              # Configuration with secure API key handling
@@ -92,11 +97,20 @@ python run_app.py
 ├── error_handler.py       # Retry logic & circuit breaker
 ├── monitoring.py          # Langfuse & Prometheus metrics
 ├── performance.py         # Response caching & optimization
+├── agent.py               # LangGraph ReAct agent (Class 11)
+├── tools.py               # Custom LangChain tools (Class 11)
+├── memory_manager.py      # Conversation memory manager (Class 11)
+├── vision_handler.py      # LLaVA vision model handler (Class 11)
+├── voice_handler.py       # Whisper STT + gTTS TTS (Class 11)
+├── multimodal_tools.py    # Multimodal LangChain tools (Class 11)
+├── multimodal_agent.py    # Multimodal agent orchestrator (Class 11)
 ├── utils.py               # Utility functions
 ├── run_app.py             # CLI launcher
 ├── .env.example           # Environment template
 ├── pdfFiles/              # Directory for uploaded PDFs
-└── vectorDB/              # Directory for vector database
+├── vectorDB/              # Directory for vector database
+├── memoryDB/              # Directory for conversation memory
+└── temp_media/            # Directory for temp audio/image files
 ```
 
 ---
@@ -297,6 +311,117 @@ pip install -r requirements.txt
 - Ensure Ollama is running
 - Check the LLM Judge tab in Streamlit
 - Works even without PDFs uploaded (uses empty context)
+
+---
+
+## Class 11: Multimodal Agents
+
+### Overview
+
+Class 11 adds **multimodal capabilities** to the RAG chatbot: a Voice Assistant Agent that can interact with images and text using vision models (LLaVA via Ollama) and voice (Whisper STT + gTTS).
+
+### Additional Setup
+
+#### 1. Install ffmpeg (required by Whisper)
+
+```bash
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+# macOS
+brew install ffmpeg
+
+# Windows (via chocolatey)
+choco install ffmpeg
+```
+
+#### 2. Pull the LLaVA Vision Model
+
+```bash
+ollama pull llava:7b
+
+# Verify
+ollama list
+```
+
+#### 3. Run the Multimodal App
+
+```bash
+streamlit run multimodal_app.py
+```
+
+### Multimodal App Tabs
+
+| Tab | Description |
+|-----|-------------|
+| **Multimodal Chat** | Chat with text, images, and voice input |
+| **Vision Studio** | Upload and analyze images with LLaVA |
+| **Voice Lab** | Test STT (Whisper) and TTS (gTTS) |
+| **Agent Info** | View tools, config, model status |
+
+### Multimodal Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VISION_ENABLED` | `true` | Enable vision capabilities |
+| `VISION_MODEL` | `llava:7b` | Ollama vision model |
+| `VOICE_ENABLED` | `true` | Enable voice capabilities |
+| `STT_ENGINE` | `whisper` | STT backend (`whisper` or `google`) |
+| `WHISPER_MODEL_SIZE` | `base` | Whisper model size (`tiny`, `base`, `small`, `medium`, `large`) |
+| `TTS_ENGINE` | `gtts` | TTS backend (`gtts` or `pyttsx3`) |
+| `MULTIMODAL_MODE` | `full` | Agent mode (`full`, `text`, `vision`, `voice`) |
+| `MULTIMODAL_AUTO_TTS` | `false` | Auto-generate speech for responses |
+
+### Architecture (Multimodal)
+
+```
+User Input (Text / Image / Audio)
+    │
+    ▼
+┌──────────────────────┐
+│  Multimodal App (UI) │ ◄─── Streamlit (4 tabs)
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  MultimodalAgent     │ ◄─── Orchestrates all modalities
+│  (LangGraph ReAct)   │
+└──────────┬───────────┘
+           │
+    ┌──────┼──────┬──────────┐
+    ▼      ▼      ▼          ▼
+┌──────┐┌─────┐┌──────┐┌────────┐
+│Vision││Voice││Tools ││ Memory │
+│(LLaVA)│(Whisper)│(5+5) ││(Buffer)│
+└──┬───┘└──┬──┘└──┬───┘└────────┘
+   ▼       ▼      ▼
+ Ollama  ffmpeg  DuckDuckGo/
+                 ChromaDB/etc.
+```
+
+### Troubleshooting (Multimodal)
+
+#### LLaVA model not found
+```bash
+ollama pull llava:7b
+```
+
+#### Whisper import error
+```bash
+pip install openai-whisper
+```
+
+#### ffmpeg not found
+Whisper requires ffmpeg for audio processing. Install it for your OS (see setup above).
+
+#### TTS not working
+```bash
+# Try gTTS (requires internet)
+pip install gTTS
+
+# Or use offline fallback
+pip install pyttsx3
+```
 
 ---
 

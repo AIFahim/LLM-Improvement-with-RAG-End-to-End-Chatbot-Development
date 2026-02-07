@@ -33,7 +33,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 
 # Ollama Configuration
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:1b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 # Azure OpenAI Configuration
@@ -96,6 +96,81 @@ RETRY_DELAY_SECONDS = float(os.getenv("RETRY_DELAY_SECONDS", "1.0"))
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))
 API_RELOAD = os.getenv("API_RELOAD", "true").lower() == "true"
+
+# =============================================================================
+# Agent Configuration (from tool-calling-agents)
+# =============================================================================
+
+AGENT_VERBOSE = os.getenv("AGENT_VERBOSE", "True").lower() == "true"
+AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", "10"))
+AGENT_EARLY_STOPPING_METHOD = "generate"
+
+# Memory Configuration
+MEMORY_TYPE = os.getenv("MEMORY_TYPE", "buffer")
+MEMORY_MAX_TOKEN_LIMIT = int(os.getenv("MEMORY_MAX_TOKEN_LIMIT", "2000"))
+MEMORY_RETURN_MESSAGES = True
+MEMORY_K = int(os.getenv("MEMORY_K", "5"))
+
+VECTOR_MEMORY_COLLECTION = "conversation_memory"
+VECTOR_MEMORY_DIR = BASE_DIR / "memoryDB"
+VECTOR_MEMORY_DIR.mkdir(exist_ok=True)
+
+# Tools Configuration
+TOOLS_ENABLED = {
+    "calculator": True,
+    "web_search": True,
+    "python_repl": True,
+    "datetime": True,
+    "rag_search": True,
+}
+WEB_SEARCH_MAX_RESULTS = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
+
+# =============================================================================
+# Vision Configuration (Class 11 - Multimodal)
+# =============================================================================
+
+VISION_ENABLED = os.getenv("VISION_ENABLED", "true").lower() == "true"
+VISION_MODEL = os.getenv("VISION_MODEL", "moondream")
+VISION_BASE_URL = os.getenv("VISION_BASE_URL", OLLAMA_BASE_URL)
+VISION_MAX_IMAGE_SIZE_MB = int(os.getenv("VISION_MAX_IMAGE_SIZE_MB", "10"))
+VISION_SUPPORTED_FORMATS = {"png", "jpg", "jpeg", "gif", "bmp", "webp"}
+VISION_MAX_TOKENS = int(os.getenv("VISION_MAX_TOKENS", "1024"))
+
+# =============================================================================
+# Voice Configuration (Class 11 - Multimodal)
+# =============================================================================
+
+VOICE_ENABLED = os.getenv("VOICE_ENABLED", "true").lower() == "true"
+STT_ENGINE = os.getenv("STT_ENGINE", "whisper")
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+TTS_ENGINE = os.getenv("TTS_ENGINE", "gtts")  # gtts | pyttsx3 | orpheus
+TTS_LANGUAGE = os.getenv("TTS_LANGUAGE", "en")
+AUDIO_SAMPLE_RATE = int(os.getenv("AUDIO_SAMPLE_RATE", "16000"))
+AUDIO_MAX_DURATION_SECONDS = int(os.getenv("AUDIO_MAX_DURATION_SECONDS", "120"))
+TEMP_MEDIA_DIR = BASE_DIR / "temp_media"
+TEMP_MEDIA_DIR.mkdir(exist_ok=True)
+
+# Orpheus TTS Configuration (Ollama-based, natural speech)
+ORPHEUS_MODEL = os.getenv("ORPHEUS_MODEL", "legraphista/Orpheus")
+ORPHEUS_BASE_URL = os.getenv("ORPHEUS_BASE_URL", OLLAMA_BASE_URL)
+ORPHEUS_VOICE = os.getenv("ORPHEUS_VOICE", "tara")  # tara|leah|jess|leo|dan|mia|zac|zoe
+ORPHEUS_SAMPLE_RATE = 24000  # SNAC decoder outputs 24kHz audio
+
+# =============================================================================
+# Multimodal Agent Configuration (Class 11)
+# =============================================================================
+
+MULTIMODAL_MODE = os.getenv("MULTIMODAL_MODE", "full")  # full | text | vision | voice
+MULTIMODAL_AUTO_TTS = os.getenv("MULTIMODAL_AUTO_TTS", "false").lower() == "true"
+MULTIMODAL_AGENT_VERBOSE = os.getenv("MULTIMODAL_AGENT_VERBOSE", "true").lower() == "true"
+MULTIMODAL_TOOLS_ENABLED = {
+    "image_analysis": True,
+    "image_question": True,
+    "voice_transcription": True,
+    "text_to_speech": True,
+    "image_to_rag": True,
+}
 
 # =============================================================================
 # Streamlit Configuration
