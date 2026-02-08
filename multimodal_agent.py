@@ -307,10 +307,15 @@ class MultimodalAgent:
                 combined_query = "\n".join(query_parts)
                 self._memory_manager.add_user_message(combined_query)
 
-                messages = [
-                    SystemMessage(content=MULTIMODAL_SYSTEM_PROMPT),
-                    HumanMessage(content=combined_query),
-                ]
+                # Build messages with conversation history for context
+                messages = [SystemMessage(content=MULTIMODAL_SYSTEM_PROMPT)]
+                # Include prior conversation so follow-ups have context
+                # (e.g. image analysis from a previous turn)
+                history = self._memory_manager.get_messages()
+                # Add history except the last message (which is the current query we just added)
+                if len(history) > 1:
+                    messages.extend(history[:-1])
+                messages.append(HumanMessage(content=combined_query))
 
                 config_dict = {"configurable": {"thread_id": self._thread_id}}
                 result = self.agent.invoke({"messages": messages}, config=config_dict)
