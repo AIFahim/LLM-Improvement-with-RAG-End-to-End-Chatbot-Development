@@ -4,6 +4,12 @@ Configuration settings for the LLM RAG Chatbot
 import os
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Base directory configuration
 BASE_DIR = Path(__file__).parent
 PDF_DIR = BASE_DIR / "pdfFiles"
@@ -13,10 +19,26 @@ VECTOR_DB_DIR = BASE_DIR / "vectorDB"
 PDF_DIR.mkdir(exist_ok=True)
 VECTOR_DB_DIR.mkdir(exist_ok=True)
 
-# LLM Configuration
-LLM_MODEL = "llama3.2:1b"
-LLM_BASE_URL = "http://localhost:11434"
-LLM_TEMPERATURE = 0.7
+# LLM Provider Selection: "ollama" or "azure"
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").lower()
+LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.7"))
+
+# Ollama Configuration
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:1.5b")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+# Azure OpenAI Configuration
+AZURE_OPENAI_API_KEY = os.environ.get("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_DEPLOYMENT = os.environ.get(
+    "AZURE_LLM_DEPLOYMENT_NAME",
+    os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4"),
+)
+AZURE_OPENAI_API_VERSION = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+
+# Backwards-compat aliases (used by vector_store.py for embeddings)
+LLM_MODEL = OLLAMA_MODEL
+LLM_BASE_URL = OLLAMA_BASE_URL
 
 # Document Processing Configuration
 CHUNK_SIZE = 1500
