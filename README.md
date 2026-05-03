@@ -1,543 +1,255 @@
-# Multi-Agent Systems with CrewAI + MCP
+# MCP Chatbot — CrewAI + Model Context Protocol
 
-This branch implements **Class 07** in two halves:
+A conversational chatbot where the **CrewAI agent gets its tools from
+an MCP server**. The same agent code runs against very different
+servers (a local Python subprocess, a remote SaaS endpoint) — only the
+connection params change. That is the Model Context Protocol value
+proposition in one demo.
 
-1. **Multi-agent orchestration** — CrewAI's Planner/Researcher/Writer/Critic/Summarizer pattern for collaborative report writing.
-2. **Multi-agent communication via MCP** — agents calling tools that live in *separate processes* (local Python, npm, or remote SaaS) over the Model Context Protocol.
+This branch is the **Class 07** material on multi-agent communication
+via MCP.
 
 ## Features
 
-### Orchestration half
-- **Multi-Role Agents**: Planner, Researcher, Writer, Critic, Summarizer
-- **Planner-Executor-Critic Model**: Structured workflow for quality output
-- **CrewAI Integration**: Agent orchestration and task management
-- **Multiple Workflows**: Full report, quick report, research-only
-- **Streamlit UI**: Interactive web interface for report generation
-- **CLI Support**: Generate reports from command line
-
-### MCP half
-- **FastMCP server** with 6 tools: ping, list_reports, save_report, calculator, datetime_now, web_search
-- **Three demo deployment shapes** so students see the same agent code calling tools across very different worlds:
-  - Local Python stdio (our own server)
-  - External Node.js stdio (Anthropic's published filesystem server, via `npx`)
+- **FastMCP server** with 6 tools: `ping`, `list_reports`,
+  `save_report`, `calculator`, `datetime_now`, `web_search`.
+- **CrewAI integration** via `MCPServerAdapter` — tools discovered at
+  connect time, called over JSON-RPC during `crew.kickoff()`.
+- **Two server shapes** in the chatbot UI:
+  - Local Python stdio (our own `mcp_server.py` subprocess)
   - Remote Streamable HTTP (DeepWiki's hosted server, no auth)
-- **Chatbot UI** with rolling conversation summary and live MCP protocol trace per turn
+- **Streamlit chatbot** with rolling conversation summary and a live
+  per-turn MCP protocol trace expander.
+- **Three terminal demos** (`run_mcp_demo*.py`) showing the same agent
+  code calling local, external (npm), remote, or DSL-style servers.
 
-## Project Structure
+## Project structure
 
 ```
 .
-# CrewAI orchestration
-├── crew_agents.py            # Multi-role agent definitions
-├── crew_tasks.py             # Task definitions for workflows
-├── crew_main.py              # CrewAI orchestration
-├── crew_app.py               # Streamlit UI for report writing
-├── run_crew.py               # CLI launcher
+# Modular MCP chatbot
+├── mcp_agents.py             # Agent definitions (chatbot, summarizer, recap)
+├── mcp_tasks.py              # Task templates (chat, rolling summary, recap)
+├── mcp_main.py                # MCPChatbot orchestration class
+├── mcp_app.py                 # Streamlit UI (thin presentation layer)
 
-# MCP server + clients
-├── mcp_server.py             # FastMCP server (6 tools, stdio)
-├── mcp_client.py             # MCPServerAdapter lifecycle wrapper
-├── run_mcp_demo.py           # Local stdio demo (terminal)
-├── run_mcp_demo_external.py  # External npm filesystem-server demo
-├── run_mcp_demo_remote.py    # Remote DeepWiki HTTP demo
-├── run_mcp_demo_dsl.py       # Same as run_mcp_demo.py via mcps=[] DSL
-├── mcp_app.py                # Streamlit MCP chatbot UI
-├── mcp_sandbox/              # Sandbox dir for the external filesystem demo
+# MCP server + client
+├── mcp_server.py              # FastMCP server (6 tools, stdio)
+├── mcp_client.py              # MCPServerAdapter lifecycle wrapper
 
-# Carryover from earlier classes
-├── agent.py                  # LangGraph ReAct agent (Class 06)
-├── tools.py                  # In-process LangChain tools (Class 06)
-├── memory_manager.py         # Memory types
-├── app.py                    # RAG chatbot UI (Class 05)
-├── chatbot.py                # RAG orchestrator (Class 05)
+# Terminal demos (one shape per file)
+├── run_mcp_demo.py            # Local stdio server (mcp_server.py)
+├── run_mcp_demo_remote.py     # Remote DeepWiki SaaS over Streamable HTTP
+├── run_mcp_demo_external.py   # Anthropic's @modelcontextprotocol/server-filesystem via npx
+├── run_mcp_demo_dsl.py        # Local server using the modern crewai.mcp DSL
 
 # Generated / data
-├── reports/                  # Generated reports output
-├── pdfFiles/                 # PDFs for the RAG demo
-└── requirements.txt          # Dependencies
-```
+├── reports/                   # Read/written by the report tools
+├── mcp_sandbox/               # Sandbox dir for the external filesystem demo
+├── mcp_diagrams/              # PNG diagrams used in the slide deck
 
-## New Modules (Class 07)
-
-### 1. crew_agents.py
-
-Defines multi-role agents for collaborative work:
-
-| Agent | Role | Capabilities |
-|-------|------|--------------|
-| Planner | Report Planner | Creates outlines, identifies research areas |
-| Researcher | Research Analyst | Gathers facts, statistics, evidence |
-| Writer | Content Writer | Composes clear, engaging content |
-| Critic | Quality Reviewer | Reviews and provides feedback |
-| Summarizer | Executive Summarizer | Creates concise summaries |
-
-```python
-from crew_agents import AgentFactory
-
-factory = AgentFactory(verbose=True)
-agents = factory.create_all_agents()
-
-# Or create specific agents
-planner = factory.create_planner()
-researcher = factory.create_researcher()
-```
-
-### 2. crew_tasks.py
-
-Defines tasks for the report writing workflow:
-
-```python
-from crew_tasks import TaskFactory, create_planning_task
-
-# Use factory with agents
-factory = TaskFactory(agents)
-tasks = factory.create_report_workflow(
-    topic="AI in Healthcare",
-    style="professional",
-    word_count=1500,
-)
-```
-
-### 3. crew_main.py
-
-Orchestrates multi-agent collaboration:
-
-```python
-from crew_main import create_report_crew
-
-# Create and run crew
-crew = create_report_crew(crew_type="report_writing")
-result = crew.create_report(
-    topic="The Future of Renewable Energy",
-    requirements="Focus on solar and wind technologies",
-    style="professional",
-    workflow="full_report",
-)
-
-print(result["result"])  # The generated report
+# Misc
+├── requirements.txt
+├── setup_ollama.sh            # One-time Ollama bootstrap
+└── .env.example
 ```
 
 ## Installation
 
 ```bash
-# Clone and checkout branch
 git clone https://github.com/AIFahim/LLM-Improvement-with-RAG-End-to-End-Chatbot-Development.git
 cd LLM-Improvement-with-RAG-End-to-End-Chatbot-Development
 git checkout class-07-multi-agent-crewai
 
-# Create environment
-conda create -n crewai-agents python=3.11
-conda activate crewai-agents
-
-# Install dependencies
+conda create -n mcp-chatbot python=3.11 -y
+conda activate mcp-chatbot
 pip install -r requirements.txt
 ```
 
-## Usage
-
-### 1. Start Ollama
+Pull a small Ollama model so you don't burn resources:
 
 ```bash
-# Using Docker
-docker start ollama
-
-# Or native
-ollama serve
+ollama pull qwen2.5:3b
+ollama serve   # if not already running
 ```
 
-### 2. Run a Streamlit UI
-
-Two UIs ship with this branch — pick whichever matches the lesson.
-
-```bash
-# A) Multi-agent report writer (orchestration half of Class 07)
-streamlit run crew_app.py
-
-# B) MCP chatbot (communication half of Class 07)
-streamlit run mcp_app.py
-```
-
-### 3. Generate a report via CLI
-
-```bash
-# Full report
-python run_crew.py --topic "AI in Healthcare" --workflow full_report
-
-# Quick report
-python run_crew.py --topic "Machine Learning Basics" --workflow quick_report --style academic
-
-# List options
-python run_crew.py --list
-```
-
-### 4. Run an MCP demo from the terminal
-
-```bash
-python run_mcp_demo.py            # local Python MCP server (stdio)
-python run_mcp_demo_remote.py     # DeepWiki SaaS MCP server (Streamable HTTP)
-python run_mcp_demo_external.py   # Anthropic's npm filesystem server (npx, requires Node)
-python run_mcp_demo_dsl.py        # local server but via the modern crewai.mcp DSL
-```
-
-## Workflows
-
-### Full Report Workflow
-```
-Planner -> Researcher -> Writer -> Critic -> Summarizer
-```
-
-### Quick Report Workflow
-```
-Researcher -> Writer
-```
-
-### Research Plan Workflow
-```
-Planner -> Researcher
-```
-
-### Write & Review Workflow
-```
-Writer -> Critic
-```
-
-## Crew Types
-
-| Crew Type | Agents | Description |
-|-----------|--------|-------------|
-| `report_writing` | All 5 agents | Full team for comprehensive reports |
-| `quick_report` | Researcher, Writer | Minimal team for quick output |
-| `research_only` | Planner, Researcher | Focus on research and planning |
-| `review_team` | Writer, Critic | Writing with quality review |
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   Streamlit UI (crew_app.py)                │
-│  ┌─────────────────┐  ┌────────────────────────────────┐   │
-│  │ Configuration   │  │      Report Generation         │   │
-│  │ - Crew Type     │  │ - Topic Input                  │   │
-│  │ - Workflow      │  │ - Progress Display             │   │
-│  │ - Style         │  │ - Report Output                │   │
-│  └────────┬────────┘  └───────────────┬────────────────┘   │
-└───────────┼───────────────────────────┼────────────────────┘
-            │                           │
-            └───────────────┬───────────┘
-                            │
-            ┌───────────────▼───────────────┐
-            │   ReportWritingCrew           │
-            │   (crew_main.py)              │
-            └───────────────┬───────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        │                   │                   │
-┌───────▼───────┐  ┌────────▼────────┐  ┌──────▼──────┐
-│ AgentFactory  │  │  TaskFactory    │  │ CrewAI Crew │
-│ (crew_agents) │  │  (crew_tasks)   │  │  Process    │
-└───────┬───────┘  └────────┬────────┘  └──────┬──────┘
-        │                   │                   │
-┌───────▼───────────────────▼───────────────────▼───────┐
-│                    Agents & Tasks                      │
-│  ┌─────────┐ ┌──────────┐ ┌────────┐ ┌────────┐      │
-│  │ Planner │→│Researcher│→│ Writer │→│ Critic │      │
-│  └─────────┘ └──────────┘ └────────┘ └────────┘      │
-│                                              ↓        │
-│                                      ┌───────────┐   │
-│                                      │Summarizer │   │
-│                                      └───────────┘   │
-└───────────────────────────────────────────────────────┘
-```
-
-## Planner-Executor-Critic Model
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                      PLANNING PHASE                       │
-│  ┌─────────┐                                             │
-│  │ Planner │ → Creates outline, identifies research      │
-│  └────┬────┘   areas, sets structure                     │
-│       │                                                   │
-└───────┼──────────────────────────────────────────────────┘
-        ↓
-┌──────────────────────────────────────────────────────────┐
-│                     EXECUTION PHASE                       │
-│  ┌──────────┐                                            │
-│  │Researcher│ → Gathers facts, statistics, evidence      │
-│  └────┬─────┘                                            │
-│       ↓                                                   │
-│  ┌────────┐                                              │
-│  │ Writer │ → Composes content following outline         │
-│  └────┬───┘                                              │
-│       │                                                   │
-└───────┼──────────────────────────────────────────────────┘
-        ↓
-┌──────────────────────────────────────────────────────────┐
-│                      CRITIQUE PHASE                       │
-│  ┌────────┐                                              │
-│  │ Critic │ → Reviews quality, accuracy, completeness    │
-│  └────┬───┘                                              │
-│       ↓                                                   │
-│  ┌───────────┐                                           │
-│  │Summarizer │ → Creates executive summary               │
-│  └───────────┘                                           │
-│                                                           │
-└──────────────────────────────────────────────────────────┘
-```
-
-## API Reference
-
-### ReportWritingCrew
-
-```python
-crew = ReportWritingCrew(
-    verbose=True,           # Log agent actions
-    process="sequential",   # or "hierarchical"
-    memory=True,            # Enable agent memory
-    output_dir="reports",   # Output directory
-)
-
-crew.setup_crew(crew_type="report_writing")
-
-result = crew.create_report(
-    topic="Report Topic",
-    requirements="Optional requirements",
-    style="professional",
-    word_count=1500,
-    workflow="full_report",
-)
-```
-
-### AgentFactory
-
-```python
-factory = AgentFactory(verbose=True)
-
-# Create all agents
-agents = factory.create_all_agents()
-
-# Create individual agents
-planner = factory.create_planner()
-researcher = factory.create_researcher()
-writer = factory.create_writer()
-critic = factory.create_critic()
-summarizer = factory.create_summarizer()
-```
-
-### TaskFactory
-
-```python
-factory = TaskFactory(agents)
-
-# Full workflow
-tasks = factory.create_report_workflow(topic, requirements, style, word_count)
-
-# Quick workflow
-tasks = factory.create_quick_report_workflow(topic, style)
-
-# Research workflow
-tasks = factory.create_research_workflow(topic, research_areas)
-```
-
-## Configuration
-
-Edit `config.py` for settings:
-
-```python
-# LLM Provider
-LLM_PROVIDER = "ollama"  # or "azure"
-OLLAMA_MODEL = "qwen2.5:1.5b"
-OLLAMA_BASE_URL = "http://localhost:11434"
-
-# Azure (if using)
-AZURE_OPENAI_API_KEY = "your-key"
-AZURE_OPENAI_ENDPOINT = "your-endpoint"
-AZURE_DEPLOYMENT_NAME = "your-deployment"
-```
-
-## Example Output
-
-```
-python run_crew.py --topic "Impact of AI on Healthcare" --workflow full_report
-
-============================================================
-Multi-Agent Report Writer - CLI Mode
-============================================================
-
-Topic: Impact of AI on Healthcare
-Workflow: full_report
-Crew: report_writing
-Style: professional
-
-Initializing crew...
-Crew ready with agents: planner, researcher, writer, critic, summarizer
-
-Generating report... This may take a few minutes.
-
-============================================================
-Report Generated Successfully!
-============================================================
-
-Execution Time: 45.23 seconds
-Tasks Completed: 5
-Agents Used: planner, researcher, writer, critic, summarizer
-
---- REPORT ---
-
-# Impact of AI on Healthcare
-
-## Executive Summary
-...
-
-## Introduction
-...
-
-## Key Findings
-...
-
-## Conclusion
-...
-
---- END REPORT ---
-
-Report saved to: reports/
-```
-
-## Multi-Agent Communication via MCP
-
-The `MultiAgentOrchestrator.send_message` method in `crew_main.py` is an
-**in-process message queue** — useful for crew↔crew handoffs but not actual
-MCP. The real MCP integration lives in the `mcp_*.py` files described below.
-
-### What MCP buys you
-The Model Context Protocol (Anthropic, Nov 2024) is a JSON-RPC standard for
-*agent ↔ tool server*. With CrewAI's `MCPServerAdapter`, an agent can use
-tools that live in a separate process — possibly written in a different
-language, possibly running on a different machine — without changing the
-agent code at all. The protocol abstracts away the tool's deployment shape.
-
-### Three demo scripts, one teaching arc
-
-```bash
-# 1. Local stdio: agent calls our own Python server
-python run_mcp_demo.py
-
-# 2. External stdio: agent calls Anthropic's published filesystem server
-#    (npx fetches the npm package on first run)
-python run_mcp_demo_external.py
-
-# 3. Remote HTTP: agent calls DeepWiki's hosted MCP server (no auth)
-python run_mcp_demo_remote.py
-```
-
-All three use the same Agent / Task / Crew shape. **Only the
-`server_params` differ.** Side-by-side these three files are the punchline
-of the whole MCP story.
-
-### The chatbot UI
+## Run the chatbot
 
 ```bash
 streamlit run mcp_app.py
 # opens at http://localhost:8501
 ```
 
-What students see:
-- **Sidebar**: pick a server (Local Python / Remote DeepWiki), Connect,
-  inspect discovered tools, choose Ollama model, Summarize / Clear chat.
-- **Main area**: standard chat input. Each assistant reply expands a
-  *MCP protocol trace* showing the raw tool calls + outputs for that turn.
-- **Switching servers** clears the chat (different tools = fresh context).
-- **Memory**: a rolling summary of the conversation is folded forward
-  after each turn and passed back as context (LangChain
-  `ConversationSummaryMemory` shape, kept transparent in code).
+In the sidebar:
 
-### The MCP server
+1. Pick a server (Local Python or Remote DeepWiki).
+2. Click **Connect**.
+3. Type a message in the chat box.
+4. Expand **MCP protocol trace** under any assistant reply to see the
+   raw tool calls + outputs that crossed the wire.
+5. Use **Summarize** for a recap, **Clear** to wipe the chat, or
+   switch the server (which auto-clears).
 
-`mcp_server.py` exposes 6 tools via FastMCP:
+## Run a one-shot terminal demo
+
+```bash
+python run_mcp_demo.py            # local Python MCP server
+python run_mcp_demo_remote.py     # DeepWiki HTTP MCP server (no auth)
+python run_mcp_demo_external.py   # Anthropic's npm filesystem server (requires Node)
+python run_mcp_demo_dsl.py        # same as run_mcp_demo.py via mcps=[] DSL
+```
+
+Diff any two of these to see what changes between deployment shapes —
+spoiler: only the `server_params`.
+
+## The MCP server (`mcp_server.py`)
+
+FastMCP server exposing 6 tools via the `@mcp.tool()` decorator:
 
 | Tool | Purpose |
 |---|---|
 | `ping` | Health check (returns `"pong from MCP server"`) |
 | `list_reports` | List filenames in `reports/` |
 | `save_report(title, content)` | Write a markdown report to `reports/` |
-| `calculator(expression)` | Safe math evaluator (`sqrt(16)`, `sin(pi/2)`, etc.) |
+| `calculator(expression)` | Safe math evaluator (`sqrt(16)`, `sin(pi/2)`) |
 | `datetime_now(operation)` | now / date / time / weekday / timestamp / format:`<strftime>` |
 | `web_search(query)` | DuckDuckGo wrapper, no API key |
 
-Run it standalone for poking with `mcp dev` or any MCP client:
+Run standalone for poking with `mcp dev` or any MCP client:
+
 ```bash
 python mcp_server.py    # blocks, talks JSON-RPC over stdio
 ```
 
-### Pitfalls worth teaching
+Deliberately NOT exposed: `python_repl`. Exposing arbitrary code
+execution as a tool would let any connected agent run code on your
+host. Worth showing students as a non-example.
 
-- **`crewai-tools` < 1.14.4** has a bug where `MCPServerAdapter` prompts to
-  install `mcp` even when it's already installed. Pin `crewai-tools[mcp] >= 1.14.4`.
-- **DSL tool-name prefixing**: `Agent(..., mcps=[MCPServerStdio(...)])` is
-  the modern pattern, but it auto-prefixes tool names with the server's
-  command path (e.g. `home_aifahim_miniconda3_bin_python_..._29c0b316`).
-  That breaks small models like `qwen2.5:3b`. We use `MCPServerAdapter`
-  for clean tool names. See `run_mcp_demo_dsl.py` for the comparison.
+## Architecture
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                  Streamlit UI (mcp_app.py)                     │
+│  ┌──────────────┐                  ┌──────────────────────┐   │
+│  │ Sidebar      │                  │ Chat surface         │   │
+│  │ - server     │                  │ - st.chat_message    │   │
+│  │ - model      │                  │ - protocol trace     │   │
+│  │ - summarize  │                  │ - recap expander     │   │
+│  └──────┬───────┘                  └──────────┬───────────┘   │
+└─────────┼──────────────────────────────────────┼──────────────┘
+          │                                      │
+          │   ┌──────────────────────────────────┴───┐
+          └──►│       MCPChatbot (mcp_main.py)        │
+              │  - connect / disconnect               │
+              │  - chat_turn                          │
+              │  - rolling summary                    │
+              │  - on-demand recap                    │
+              └──┬─────────────────┬─────────────────┘
+                 │                 │
+        ┌────────▼─────┐   ┌───────▼─────────┐
+        │ AgentFactory │   │  Task templates │
+        │ (mcp_agents) │   │  (mcp_tasks)    │
+        └──────────────┘   └─────────────────┘
+                 │
+                 ▼
+        ┌─────────────────────────────────────────┐
+        │   MCPServerAdapter (crewai_tools)       │
+        │   discovery + JSON-RPC tool calls       │
+        └─────────────┬───────────────────────────┘
+                      │
+        ┌─────────────┴───────────────────────────┐
+        │                                         │
+   ┌────▼─────────────┐          ┌─────────────────▼────────┐
+   │ Local Python     │          │ Remote DeepWiki          │
+   │ mcp_server.py    │          │ mcp.deepwiki.com/mcp     │
+   │ (stdio)          │          │ (Streamable HTTP)        │
+   └──────────────────┘          └──────────────────────────┘
+```
+
+## How a chat turn works
+
+```
+User types → mcp_app.py
+  └── chatbot.chat_turn(msg, llm)               ## mcp_main.py
+        ├── factory.create_chatbot(tools)       ## mcp_agents.py
+        ├── create_chat_task(agent, msg, sum)   ## mcp_tasks.py
+        ├── crew.kickoff()                      ## CrewAI
+        │     ├── LLM #1 (Ollama)  → tool call decision
+        │     ├── MCPServerAdapter → JSON-RPC over stdio/HTTP
+        │     │     ├── (local) mcp_server.py @mcp.tool() runs
+        │     │     └── (remote) DeepWiki processes the call
+        │     └── LLM #2 (Ollama)  → final reply with tool result
+        ├── _roll_summary_forward()             ## mcp_main.py
+        │     └── crew.kickoff() (summarizer agent, no tools)
+        │           └── LLM #3 (Ollama) → updated rolling summary
+        └── return (reply, captured_trace)
+```
+
+Three Ollama calls per turn: 2 for the agent, 1 for the rolling summary
+update.
+
+## Pitfalls worth teaching
+
+- **`crewai-tools` < 1.14.4** has a bug where `MCPServerAdapter` prompts
+  to install `mcp` even when it is installed. Pin
+  `crewai-tools[mcp] >= 1.14.4`.
+- **DSL tool-name prefixing**: `Agent(..., mcps=[MCPServerStdio(...)])`
+  is the modern pattern, but it auto-prefixes tool names with the
+  server's command path. That breaks small models like `qwen2.5:3b`.
+  We use `MCPServerAdapter` for clean tool names. See
+  `run_mcp_demo_dsl.py` for the comparison.
 - **CrewAI `memory=True` is broken with Ollama** on this stack — Chroma
-  still demands `OPENAI_API_KEY` even with `EMBEDDINGS_OLLAMA_*` env vars
-  set. The chatbot uses a manual rolling summary instead. (Same reason
-  commit `f0a8ce7` disabled it.)
+  demands `OPENAI_API_KEY` even with `EMBEDDINGS_OLLAMA_*` env vars
+  set. The chatbot uses a manual rolling summary instead.
 - **Don't expose `python_repl` over MCP**. Arbitrary code execution
   through a public protocol = remote code execution for any connected
-  agent. Worth showing students as a *non*-example.
-- **Small-model tool-eagerness**: `qwen2.5:3b` will fire 3+ tool calls on
-  `"Hi"` unless the agent's backstory explicitly tells it *when not to
-  use tools*. See `mcp_app.py:chat_turn`'s backstory string.
+  agent.
+- **Small-model tool-eagerness**: `qwen2.5:3b` will fire 3+ tool calls
+  on `"Hi"` unless the agent's backstory explicitly tells it *when not
+  to use tools*. See `mcp_agents.py:CHATBOT_BACKSTORY`.
+
+## Configuration
+
+Two env vars (defaults already work):
+
+```bash
+export OLLAMA_MODEL=qwen2.5:3b              # bigger = better tool routing
+export OLLAMA_BASE_URL=http://localhost:11434
+```
+
+Both are surfaced as text inputs in the Streamlit sidebar, so you can
+swap models live without restarting.
 
 ## Troubleshooting
 
-### CrewAI Import Error
-```bash
-pip install crewai crewai-tools --upgrade
-```
-
-### MCP: "You are missing the 'mcp' package" prompt on startup
+### `MCPServerAdapter` prompts to install `mcp` on connect
 You're on `crewai-tools < 1.14.4`. Upgrade:
 ```bash
 pip install -U "crewai-tools[mcp]>=1.14.4"
 ```
 
-### MCP: Memory init errors mentioning `CHROMA_OPENAI_API_KEY`
-CrewAI 1.14's `memory=True` doesn't work with Ollama embedders on this
-stack. Set `memory=False` and use the manual rolling-summary approach
-(see `mcp_app.py:chat_turn`).
+### Memory init errors mentioning `CHROMA_OPENAI_API_KEY`
+CrewAI 1.14's `memory=True` doesn't work with Ollama embedders here.
+The chatbot doesn't use `memory=True`; if you toggle it on yourself,
+expect this error.
 
-### MCP: Agent fires tools on "Hi" / over-uses tools
-Small models default to "I have tools, therefore I should demo them."
-Strengthen the agent's backstory to spell out when *not* to call tools.
-Or bump to `qwen2.5:7b-instruct` for more discerning routing.
+### Agent fires tools on "Hi" / over-uses tools
+Strengthen the backstory in `mcp_agents.py:CHATBOT_BACKSTORY` to spell
+out when *not* to call tools, or bump to `qwen2.5:7b-instruct` for
+more discerning routing.
 
-### Ollama Connection Error
+### Ollama connection error
 ```bash
-docker ps | grep ollama
-docker start ollama
+curl -s http://localhost:11434/api/tags && echo "Ollama up" || ollama serve &
 ```
 
-### Reports / vectorDB Issues
+### Leaked MCP server subprocesses
+The chatbot disconnects cleanly on Disconnect, but if Streamlit was
+killed mid-conversation the subprocess can survive:
 ```bash
-rm -rf reports/
-# vectorDB corruption (chromadb version mismatch):
-mv vectorDB vectorDB.bak-$(date +%Y%m%d)
+pkill -f "python.*mcp_server.py"
 ```
-
-## Related Classes
-
-- **Class 06**: LangChain Deep Dive (Memory, Tools, Agents)
-- **Class 05**: RAG Chatbot (Document Q&A)
 
 ## License
 
-MIT License
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch
-3. Commit changes
-4. Push to branch
-5. Create Pull Request
+MIT.
