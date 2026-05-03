@@ -411,9 +411,13 @@ class RAGSearchTool(BaseTool):
     """
 
     name: str = "rag_search"
-    description: str = """Useful for searching through uploaded PDF documents.
-    Use this when the user asks about information in their uploaded documents.
-    Input should be a search query related to the document content."""
+    description: str = """Search the user's uploaded PDF documents.
+    Call this for ANY question about uploaded files, including:
+    - "what is this PDF about?" / summary or overview requests
+    - specific facts, definitions, or quotes from the document
+    - "according to the document..." style questions
+    - any reference to "this file", "the PDF", "the document", "uploaded content"
+    Input: a search query (paraphrase the user's question if needed)."""
     args_schema: Type[BaseModel] = RAGSearchInput
 
     vector_store: Any = None

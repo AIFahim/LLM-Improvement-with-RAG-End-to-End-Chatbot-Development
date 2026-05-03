@@ -37,8 +37,15 @@ Available tools:
 - python_repl: For executing Python code
 - rag_search: For searching uploaded documents
 
-Use tools when needed to provide accurate answers. Think step by step.
-Be concise and helpful in your responses."""
+IMPORTANT RULES — follow these strictly:
+- If the user asks ANYTHING about an uploaded document, PDF, "this file",
+  "the document", a summary, or its contents, you MUST call rag_search FIRST
+  before answering. Never describe an uploaded document from prior knowledge.
+- For any math or arithmetic, you MUST call calculator.
+- For current date or time, you MUST call datetime.
+- For facts you are unsure about or that may be recent, call web_search.
+
+Think step by step. Be concise and helpful in your responses."""
 
 
 class LangChainAgent:
