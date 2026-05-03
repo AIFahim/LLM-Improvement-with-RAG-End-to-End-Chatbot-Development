@@ -15,8 +15,11 @@ Run:
     streamlit run mcp_app.py
 """
 
+import io
 import os
+import re
 import sys
+from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 import streamlit as st
@@ -46,6 +49,8 @@ def init_session_state() -> None:
         st.session_state.setdefault(key, [])
     for key in ("result_local", "result_external", "result_remote"):
         st.session_state.setdefault(key, None)
+    for key in ("trace_local", "trace_external", "trace_remote"):
+        st.session_state.setdefault(key, None)
 
 
 def build_llm(model: str, base_url: str) -> LLM:
@@ -70,6 +75,13 @@ def connect(slot: str, server_params) -> None:
     st.session_state[f"tools_{slot}"] = list(adapter.tools)
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
+
 def run_crew(
     slot: str,
     role: str,
@@ -78,7 +90,14 @@ def run_crew(
     task_description: str,
     expected_output: str,
     llm: LLM,
-) -> str:
+) -> tuple[str, str]:
+    """Run the crew and return (final_answer, captured_trace).
+
+    The trace is the verbose stdout from crew.kickoff() — it contains the
+    tool calls and their raw outputs, which is the high-value teaching
+    artifact. Showing it lets students see what the MCP server actually
+    returned, separate from how the LLM summarized it.
+    """
     tools = st.session_state[f"tools_{slot}"]
     agent = Agent(
         role=role,
@@ -101,8 +120,11 @@ def run_crew(
         verbose=True,
         memory=False,
     )
-    result = crew.kickoff()
-    return str(result)
+    buf = io.StringIO()
+    with redirect_stdout(buf), redirect_stderr(buf):
+        result = crew.kickoff()
+    trace = _strip_ansi(buf.getvalue())
+    return str(result), trace
 
 
 def render_tools(slot: str) -> None:
@@ -151,7 +173,7 @@ def tab_local(llm: LLM) -> None:
                      key="btn_run_local"):
             with st.spinner("Agent is working..."):
                 try:
-                    result = run_crew(
+                    result, trace = run_crew(
                         slot="local",
                         role="Report Archivist",
                         goal="Use MCP tools to inspect and save reports.",
@@ -171,12 +193,16 @@ def tab_local(llm: LLM) -> None:
                         llm=llm,
                     )
                     st.session_state["result_local"] = result
+                    st.session_state["trace_local"] = trace
                 except Exception as e:
                     st.error(f"Run failed: {e}")
 
     if st.session_state["result_local"]:
-        st.markdown("### Result")
+        st.markdown("### Final answer (from the LLM)")
         st.markdown(st.session_state["result_local"])
+        if st.session_state.get("trace_local"):
+            with st.expander("Show MCP protocol trace (raw tool calls + outputs)"):
+                st.code(st.session_state["trace_local"], language="text")
 
 
 def tab_external(llm: LLM) -> None:
@@ -232,7 +258,7 @@ def tab_external(llm: LLM) -> None:
             with st.spinner("Agent is working..."):
                 try:
                     sandbox_path = str(SANDBOX)
-                    result = run_crew(
+                    result, trace = run_crew(
                         slot="external",
                         role="Sandbox Librarian",
                         goal=(
@@ -259,12 +285,16 @@ def tab_external(llm: LLM) -> None:
                         llm=llm,
                     )
                     st.session_state["result_external"] = result
+                    st.session_state["trace_external"] = trace
                 except Exception as e:
                     st.error(f"Run failed: {e}")
 
     if st.session_state["result_external"]:
-        st.markdown("### Result")
+        st.markdown("### Final answer (from the LLM)")
         st.markdown(st.session_state["result_external"])
+        if st.session_state.get("trace_external"):
+            with st.expander("Show MCP protocol trace (raw tool calls + outputs)"):
+                st.code(st.session_state["trace_external"], language="text")
 
 
 def tab_remote(llm: LLM) -> None:
@@ -313,7 +343,7 @@ def tab_remote(llm: LLM) -> None:
         if st.button("Run agent", key="btn_run_remote"):
             with st.spinner("Agent is querying DeepWiki..."):
                 try:
-                    result = run_crew(
+                    result, trace = run_crew(
                         slot="remote",
                         role="Open-Source Researcher",
                         goal=(
@@ -327,20 +357,27 @@ def tab_remote(llm: LLM) -> None:
                         task_description=(
                             f"Use the `ask_question` tool with "
                             f"repoName='{repo}' and question='{question}'. "
-                            f"Then summarize the answer in 2-3 sentences."
+                            f"Then summarize the answer for a student."
                         ),
                         expected_output=(
-                            "A 2-3 sentence summary sourced from DeepWiki."
+                            "A short summary sourced from DeepWiki."
                         ),
                         llm=llm,
                     )
                     st.session_state["result_remote"] = result
+                    st.session_state["trace_remote"] = trace
                 except Exception as e:
                     st.error(f"Run failed: {e}")
 
     if st.session_state["result_remote"]:
-        st.markdown("### Result")
+        st.markdown("### Final answer (from the LLM)")
         st.markdown(st.session_state["result_remote"])
+        if st.session_state.get("trace_remote"):
+            with st.expander(
+                "Show MCP protocol trace (the raw DeepWiki answer is here)",
+                expanded=False,
+            ):
+                st.code(st.session_state["trace_remote"], language="text")
 
 
 def sidebar() -> tuple[str, str]:
