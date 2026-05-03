@@ -21,7 +21,8 @@ via MCP.
 - **Streamlit chatbot** with rolling conversation summary and a live
   per-turn MCP protocol trace expander.
 - **Three terminal demos** (`run_mcp_demo*.py`) showing the same agent
-  code calling local, external (npm), remote, or DSL-style servers.
+  code calling a local stdio server, a remote HTTP server, and the
+  same local server via the modern `crewai.mcp` DSL.
 
 ## Project structure
 
@@ -40,12 +41,10 @@ via MCP.
 # Terminal demos (one shape per file)
 ├── run_mcp_demo.py            # Local stdio server (mcp_server.py)
 ├── run_mcp_demo_remote.py     # Remote DeepWiki SaaS over Streamable HTTP
-├── run_mcp_demo_external.py   # Anthropic's @modelcontextprotocol/server-filesystem via npx
 ├── run_mcp_demo_dsl.py        # Local server using the modern crewai.mcp DSL
 
 # Generated / data
 ├── reports/                   # Read/written by the report tools
-├── mcp_sandbox/               # Sandbox dir for the external filesystem demo
 ├── mcp_diagrams/              # PNG diagrams used in the slide deck
 
 # Misc
@@ -95,7 +94,6 @@ In the sidebar:
 ```bash
 python run_mcp_demo.py            # local Python MCP server
 python run_mcp_demo_remote.py     # DeepWiki HTTP MCP server (no auth)
-python run_mcp_demo_external.py   # Anthropic's npm filesystem server (requires Node)
 python run_mcp_demo_dsl.py        # same as run_mcp_demo.py via mcps=[] DSL
 ```
 

@@ -6,19 +6,18 @@ Run:
 
 What this proves:
 - The MCP server is hosted by a third party (DeepWiki by Devin/Cognition).
-  No code, no subprocess, no npm package — just a URL.
+  No code, no subprocess — just a URL.
 - Transport is Streamable HTTP (the modern MCP transport — replaces SSE).
 - CrewAI's MCPServerAdapter discovers the server's tools and hands them to
   a CrewAI Agent.
 - The agent uses them to answer a question about a real GitHub repo.
 
 Pedagogical pitch:
-- run_mcp_demo.py            -> calls OUR Python MCP server (stdio, in-repo)
-- run_mcp_demo_external.py   -> calls Anthropic's npm filesystem server (stdio)
-- run_mcp_demo_remote.py     -> calls a SaaS-hosted MCP server (HTTP)
+- run_mcp_demo.py        -> calls OUR Python MCP server (stdio, in-repo)
+- run_mcp_demo_remote.py -> calls a SaaS-hosted MCP server (HTTP)
 
-Same protocol, three different deployment shapes. The agent code looks
-identical in all three. That's the whole point of MCP — the tool author,
+Same protocol, two different deployment shapes. The agent code looks
+identical in both. That's the whole point of MCP — the tool author,
 language, and deployment are abstracted away.
 
 DeepWiki MCP details:
