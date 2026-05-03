@@ -1,9 +1,13 @@
-# Multi-Agent Systems with CrewAI
+# Multi-Agent Systems with CrewAI + MCP
 
-This branch implements Class 07: Multi-Agent Systems using CrewAI for collaborative report writing.
+This branch implements **Class 07** in two halves:
+
+1. **Multi-agent orchestration** — CrewAI's Planner/Researcher/Writer/Critic/Summarizer pattern for collaborative report writing.
+2. **Multi-agent communication via MCP** — agents calling tools that live in *separate processes* (local Python, npm, or remote SaaS) over the Model Context Protocol.
 
 ## Features
 
+### Orchestration half
 - **Multi-Role Agents**: Planner, Researcher, Writer, Critic, Summarizer
 - **Planner-Executor-Critic Model**: Structured workflow for quality output
 - **CrewAI Integration**: Agent orchestration and task management
@@ -11,22 +15,46 @@ This branch implements Class 07: Multi-Agent Systems using CrewAI for collaborat
 - **Streamlit UI**: Interactive web interface for report generation
 - **CLI Support**: Generate reports from command line
 
+### MCP half
+- **FastMCP server** with 6 tools: ping, list_reports, save_report, calculator, datetime_now, web_search
+- **Three demo deployment shapes** so students see the same agent code calling tools across very different worlds:
+  - Local Python stdio (our own server)
+  - External Node.js stdio (Anthropic's published filesystem server, via `npx`)
+  - Remote Streamable HTTP (DeepWiki's hosted server, no auth)
+- **Chatbot UI** with rolling conversation summary and live MCP protocol trace per turn
+
 ## Project Structure
 
 ```
 .
-├── crew_agents.py        # Multi-role agent definitions
-├── crew_tasks.py         # Task definitions for workflows
-├── crew_main.py          # CrewAI orchestration
-├── crew_app.py           # Streamlit UI
-├── run_crew.py           # CLI launcher
-├── reports/              # Generated reports output
-├── agent.py              # LangGraph ReAct agent (Class 06)
-├── tools.py              # Custom tools
-├── memory_manager.py     # Memory types
-├── app.py                # RAG chatbot UI
-├── chatbot.py            # RAG orchestrator
-└── requirements.txt      # Dependencies
+# CrewAI orchestration
+├── crew_agents.py            # Multi-role agent definitions
+├── crew_tasks.py             # Task definitions for workflows
+├── crew_main.py              # CrewAI orchestration
+├── crew_app.py               # Streamlit UI for report writing
+├── run_crew.py               # CLI launcher
+
+# MCP server + clients
+├── mcp_server.py             # FastMCP server (6 tools, stdio)
+├── mcp_client.py             # MCPServerAdapter lifecycle wrapper
+├── run_mcp_demo.py           # Local stdio demo (terminal)
+├── run_mcp_demo_external.py  # External npm filesystem-server demo
+├── run_mcp_demo_remote.py    # Remote DeepWiki HTTP demo
+├── run_mcp_demo_dsl.py       # Same as run_mcp_demo.py via mcps=[] DSL
+├── mcp_app.py                # Streamlit MCP chatbot UI
+├── mcp_sandbox/              # Sandbox dir for the external filesystem demo
+
+# Carryover from earlier classes
+├── agent.py                  # LangGraph ReAct agent (Class 06)
+├── tools.py                  # In-process LangChain tools (Class 06)
+├── memory_manager.py         # Memory types
+├── app.py                    # RAG chatbot UI (Class 05)
+├── chatbot.py                # RAG orchestrator (Class 05)
+
+# Generated / data
+├── reports/                  # Generated reports output
+├── pdfFiles/                 # PDFs for the RAG demo
+└── requirements.txt          # Dependencies
 ```
 
 ## New Modules (Class 07)
@@ -117,14 +145,19 @@ docker start ollama
 ollama serve
 ```
 
-### 2. Run Streamlit UI
+### 2. Run a Streamlit UI
+
+Two UIs ship with this branch — pick whichever matches the lesson.
 
 ```bash
-python run_crew.py
-# Access at: http://localhost:8503
+# A) Multi-agent report writer (orchestration half of Class 07)
+streamlit run crew_app.py
+
+# B) MCP chatbot (communication half of Class 07)
+streamlit run mcp_app.py
 ```
 
-### 3. Generate via CLI
+### 3. Generate a report via CLI
 
 ```bash
 # Full report
@@ -135,6 +168,15 @@ python run_crew.py --topic "Machine Learning Basics" --workflow quick_report --s
 
 # List options
 python run_crew.py --list
+```
+
+### 4. Run an MCP demo from the terminal
+
+```bash
+python run_mcp_demo.py            # local Python MCP server (stdio)
+python run_mcp_demo_remote.py     # DeepWiki SaaS MCP server (Streamable HTTP)
+python run_mcp_demo_external.py   # Anthropic's npm filesystem server (npx, requires Node)
+python run_mcp_demo_dsl.py        # local server but via the modern crewai.mcp DSL
 ```
 
 ## Workflows
@@ -361,27 +403,91 @@ Agents Used: planner, researcher, writer, critic, summarizer
 Report saved to: reports/
 ```
 
-## Multi-Agent Communication (MCP-Style)
+## Multi-Agent Communication via MCP
 
-The `MultiAgentOrchestrator` class supports communication between crews:
+The `MultiAgentOrchestrator.send_message` method in `crew_main.py` is an
+**in-process message queue** — useful for crew↔crew handoffs but not actual
+MCP. The real MCP integration lives in the `mcp_*.py` files described below.
 
-```python
-from crew_main import MultiAgentOrchestrator
+### What MCP buys you
+The Model Context Protocol (Anthropic, Nov 2024) is a JSON-RPC standard for
+*agent ↔ tool server*. With CrewAI's `MCPServerAdapter`, an agent can use
+tools that live in a separate process — possibly written in a different
+language, possibly running on a different machine — without changing the
+agent code at all. The protocol abstracts away the tool's deployment shape.
 
-orchestrator = MultiAgentOrchestrator()
+### Three demo scripts, one teaching arc
 
-# Create multiple crews
-crew1 = orchestrator.create_crew("research_team", crew_type="research_only")
-crew2 = orchestrator.create_crew("writing_team", crew_type="review_team")
+```bash
+# 1. Local stdio: agent calls our own Python server
+python run_mcp_demo.py
 
-# Send messages between crews
-orchestrator.send_message(
-    from_crew="research_team",
-    to_crew="writing_team",
-    message_type="research_complete",
-    content={"findings": "..."}
-)
+# 2. External stdio: agent calls Anthropic's published filesystem server
+#    (npx fetches the npm package on first run)
+python run_mcp_demo_external.py
+
+# 3. Remote HTTP: agent calls DeepWiki's hosted MCP server (no auth)
+python run_mcp_demo_remote.py
 ```
+
+All three use the same Agent / Task / Crew shape. **Only the
+`server_params` differ.** Side-by-side these three files are the punchline
+of the whole MCP story.
+
+### The chatbot UI
+
+```bash
+streamlit run mcp_app.py
+# opens at http://localhost:8501
+```
+
+What students see:
+- **Sidebar**: pick a server (Local Python / Remote DeepWiki), Connect,
+  inspect discovered tools, choose Ollama model, Summarize / Clear chat.
+- **Main area**: standard chat input. Each assistant reply expands a
+  *MCP protocol trace* showing the raw tool calls + outputs for that turn.
+- **Switching servers** clears the chat (different tools = fresh context).
+- **Memory**: a rolling summary of the conversation is folded forward
+  after each turn and passed back as context (LangChain
+  `ConversationSummaryMemory` shape, kept transparent in code).
+
+### The MCP server
+
+`mcp_server.py` exposes 6 tools via FastMCP:
+
+| Tool | Purpose |
+|---|---|
+| `ping` | Health check (returns `"pong from MCP server"`) |
+| `list_reports` | List filenames in `reports/` |
+| `save_report(title, content)` | Write a markdown report to `reports/` |
+| `calculator(expression)` | Safe math evaluator (`sqrt(16)`, `sin(pi/2)`, etc.) |
+| `datetime_now(operation)` | now / date / time / weekday / timestamp / format:`<strftime>` |
+| `web_search(query)` | DuckDuckGo wrapper, no API key |
+
+Run it standalone for poking with `mcp dev` or any MCP client:
+```bash
+python mcp_server.py    # blocks, talks JSON-RPC over stdio
+```
+
+### Pitfalls worth teaching
+
+- **`crewai-tools` < 1.14.4** has a bug where `MCPServerAdapter` prompts to
+  install `mcp` even when it's already installed. Pin `crewai-tools[mcp] >= 1.14.4`.
+- **DSL tool-name prefixing**: `Agent(..., mcps=[MCPServerStdio(...)])` is
+  the modern pattern, but it auto-prefixes tool names with the server's
+  command path (e.g. `home_aifahim_miniconda3_bin_python_..._29c0b316`).
+  That breaks small models like `qwen2.5:3b`. We use `MCPServerAdapter`
+  for clean tool names. See `run_mcp_demo_dsl.py` for the comparison.
+- **CrewAI `memory=True` is broken with Ollama** on this stack — Chroma
+  still demands `OPENAI_API_KEY` even with `EMBEDDINGS_OLLAMA_*` env vars
+  set. The chatbot uses a manual rolling summary instead. (Same reason
+  commit `f0a8ce7` disabled it.)
+- **Don't expose `python_repl` over MCP**. Arbitrary code execution
+  through a public protocol = remote code execution for any connected
+  agent. Worth showing students as a *non*-example.
+- **Small-model tool-eagerness**: `qwen2.5:3b` will fire 3+ tool calls on
+  `"Hi"` unless the agent's backstory explicitly tells it *when not to
+  use tools*. See `mcp_app.py:chat_turn`'s backstory string.
 
 ## Troubleshooting
 
@@ -390,15 +496,33 @@ orchestrator.send_message(
 pip install crewai crewai-tools --upgrade
 ```
 
+### MCP: "You are missing the 'mcp' package" prompt on startup
+You're on `crewai-tools < 1.14.4`. Upgrade:
+```bash
+pip install -U "crewai-tools[mcp]>=1.14.4"
+```
+
+### MCP: Memory init errors mentioning `CHROMA_OPENAI_API_KEY`
+CrewAI 1.14's `memory=True` doesn't work with Ollama embedders on this
+stack. Set `memory=False` and use the manual rolling-summary approach
+(see `mcp_app.py:chat_turn`).
+
+### MCP: Agent fires tools on "Hi" / over-uses tools
+Small models default to "I have tools, therefore I should demo them."
+Strengthen the agent's backstory to spell out when *not* to call tools.
+Or bump to `qwen2.5:7b-instruct` for more discerning routing.
+
 ### Ollama Connection Error
 ```bash
 docker ps | grep ollama
 docker start ollama
 ```
 
-### Memory Issues
+### Reports / vectorDB Issues
 ```bash
 rm -rf reports/
+# vectorDB corruption (chromadb version mismatch):
+mv vectorDB vectorDB.bak-$(date +%Y%m%d)
 ```
 
 ## Related Classes
