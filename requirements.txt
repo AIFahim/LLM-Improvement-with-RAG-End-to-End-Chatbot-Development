@@ -32,6 +32,9 @@ requests>=2.31.0
 termcolor
 
 # Multi-Agent Systems (Class 07)
-crewai>=0.86.0
-crewai-tools>=0.17.0
+crewai>=1.14.0
+crewai-tools[mcp]>=1.14.4
 litellm>=1.55.0
+
+# Model Context Protocol (Class 07 — MCP demo)
+mcp>=1.26.0
