@@ -114,8 +114,25 @@ def render_history_for_prompt(max_turns: int = 8) -> str:
     return "\n".join(lines)
 
 
-def chat_turn(user_message: str, llm: LLM) -> tuple[str, str]:
-    """Run one CrewAI turn given the new user message. Returns (reply, trace)."""
+def chat_turn(user_message: str, llm: LLM, base_url: str) -> tuple[str, str]:
+    """Run one CrewAI turn given the new user message. Returns (reply, trace).
+
+    Memory: we use *manual transcript injection* via
+    `render_history_for_prompt`, NOT CrewAI's `memory=True`. Why:
+
+    - CrewAI 1.14's `memory=True` requires Chroma vector storage, and on
+      this stack Chroma fails to initialize without OPENAI_API_KEY even
+      when EMBEDDINGS_OLLAMA_* env vars are set. Verified empirically:
+      Turn 1 errors with "Memory requires an embedder for vector search
+      but initialization failed: The CHROMA_OPENAI_API_KEY..." This is
+      why commit f0a8ce7 explicitly disabled it on this branch.
+    - Manual transcript injection works without any embedder, gives
+      literal recall of recent turns (what a chatbot needs), and keeps
+      the prompt fully visible to students.
+
+    If you upgrade CrewAI / Chroma in the future, retry `memory=True` —
+    it may start working without OPENAI_API_KEY.
+    """
     tools = st.session_state["tools"]
     history = render_history_for_prompt()
 
@@ -274,7 +291,7 @@ def main() -> None:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    reply, trace = chat_turn(user_message, llm)
+                    reply, trace = chat_turn(user_message, llm, base_url)
                 except Exception as e:
                     reply = f"Error: {e}"
                     trace = ""
