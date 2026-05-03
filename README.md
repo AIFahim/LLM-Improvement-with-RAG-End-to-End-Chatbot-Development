@@ -89,6 +89,41 @@ In the sidebar:
 5. Use **Summarize** for a recap, **Clear** to wipe the chat, or
    switch the server (which auto-clears).
 
+## Demo prompts (try these in order)
+
+The chatbot exposes 6 tools when connected to the local server and 3
+when connected to DeepWiki. The prompts below are designed so each one
+exercises a specific tool — open the **MCP protocol trace** expander
+under each reply to see the JSON-RPC call.
+
+### Phase 1 — Local Python server
+Sidebar → *Local Python (mcp_server.py)* → **Connect**.
+
+| # | Prompt | Tool that fires | What to notice |
+|---|---|---|---|
+| 1 | `What's the square root of 2025?` | `calculator` | First "wow" — open the trace expander, show the JSON-RPC call |
+| 2 | `What day of the week is today?` | `datetime_now` | Second tool, different operation. Trace shows `args={'operation': 'weekday'}` |
+| 3 | `What's the difference between supervised and unsupervised learning?` | none | Agent answered from prior knowledge — no trace lines. Reinforces "tools serve the user's request" |
+| 4 | `My favorite number is 42.` | none | Agent acknowledges. Internally the running summary captures "favorite number = 42" |
+| 5 | `What's my favorite number times 7?` | `calculator` | Memory test — turn 4's literal text isn't in the prompt anymore, only the rolling summary. Agent still knows 42, calls calculator → 294 |
+| 6 | `Save a report titled 'class07-demo' with content 'Students saw MCP work today.'` | `save_report` | A new file appears under `reports/` |
+| 7 | `How many reports do I currently have?` | `list_reports` | Count comes back from disk |
+
+### Phase 2 — Remote DeepWiki server
+Sidebar → *Remote DeepWiki (HTTP)* → **Connect**.
+Switching servers auto-clears the chat — that's expected, the tool set is different.
+
+| # | Prompt | Tool that fires | What to notice |
+|---|---|---|---|
+| 8 | `What is crewAIInc/crewAI and what are its core abstractions?` | `ask_question` | DeepWiki returns real wiki content. The trace shows a JSON-RPC call to `mcp.deepwiki.com/mcp` over HTTPS — no subprocess this time |
+| 9 | `For repo facebook/react, how does the reconciliation algorithm work?` | `ask_question` | Same tool, different repo. Shows the agent picks tool args correctly |
+
+### The point
+Same chat box. Same agent code. The only thing that changed between
+Phase 1 and Phase 2 is the connection params in the sidebar. **That is
+the MCP value proposition** — once the protocol is in place, an agent
+can use tools authored by anyone, in any language, deployed anywhere.
+
 ## Run a one-shot terminal demo
 
 ```bash
