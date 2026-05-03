@@ -57,6 +57,7 @@ def init_session_state() -> None:
     st.session_state.setdefault("tools", [])
     st.session_state.setdefault("server_kind", None)
     st.session_state.setdefault("server_label", None)
+    st.session_state.setdefault("summary", None)
 
 
 def server_params_for(kind: str) -> Any:
@@ -91,6 +92,12 @@ def connect(kind: str, label: str) -> None:
     st.session_state["tools"] = list(adapter.tools)
     st.session_state["server_kind"] = kind
     st.session_state["server_label"] = label
+    # Fresh conversation per server: the new server has different tools,
+    # so carrying over the prior chat would just confuse both the user
+    # (different tool set in trace) and the agent (history references
+    # tools no longer present).
+    st.session_state["messages"] = []
+    st.session_state["summary"] = None
 
 
 def build_llm(model: str, base_url: str) -> LLM:
@@ -112,6 +119,51 @@ def render_history_for_prompt(max_turns: int = 8) -> str:
         speaker = "User" if m["role"] == "user" else "Assistant"
         lines.append(f"{speaker}: {m['content']}")
     return "\n".join(lines)
+
+
+def summarize_conversation(llm: LLM) -> str:
+    """Produce a short summary of the current chat. No MCP tools needed —
+    summarization is a pure LLM task, so the agent has no tools."""
+    messages = st.session_state["messages"]
+    if not messages:
+        return "No conversation to summarize yet."
+
+    transcript = "\n".join(
+        f"{m['role'].title()}: {m['content']}" for m in messages
+    )
+
+    agent = Agent(
+        role="Summarizer",
+        goal="Summarize a chatbot conversation accurately and concisely.",
+        backstory=(
+            "You write faithful, neutral summaries. You don't add facts "
+            "that weren't in the conversation, and you don't omit major "
+            "topics that were."
+        ),
+        tools=[],
+        llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )
+    task = Task(
+        description=(
+            "Summarize the conversation below as 3-5 bullet points covering "
+            "the main topics discussed and any conclusions reached. If a "
+            "tool was called, mention which tool and what it returned at a "
+            "high level.\n\n"
+            f"---\n{transcript}\n---"
+        ),
+        expected_output="A short bulleted summary.",
+        agent=agent,
+    )
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
+        process=Process.sequential,
+        verbose=False,
+        memory=False,
+    )
+    return str(crew.kickoff())
 
 
 def chat_turn(user_message: str, llm: LLM, base_url: str) -> tuple[str, str]:
@@ -239,8 +291,22 @@ def sidebar() -> tuple[str, str]:
     )
 
     st.sidebar.divider()
-    if st.sidebar.button("Clear conversation"):
+    st.sidebar.subheader("Conversation")
+    cols = st.sidebar.columns([1, 1])
+    if cols[0].button("Summarize", use_container_width=True):
+        if not st.session_state["messages"]:
+            st.session_state["summary"] = "No conversation to summarize yet."
+        else:
+            with st.spinner("Summarizing..."):
+                try:
+                    st.session_state["summary"] = summarize_conversation(
+                        build_llm(model, base_url)
+                    )
+                except Exception as e:
+                    st.session_state["summary"] = f"Summarize failed: {e}"
+    if cols[1].button("Clear", use_container_width=True):
         st.session_state["messages"] = []
+        st.session_state["summary"] = None
         st.rerun()
 
     return model, base_url
@@ -279,6 +345,13 @@ def main() -> None:
 
     model, base_url = sidebar()
     llm = build_llm(model, base_url)
+
+    if st.session_state.get("summary"):
+        with st.expander("Conversation summary", expanded=True):
+            st.markdown(st.session_state["summary"])
+            if st.button("Dismiss summary"):
+                st.session_state["summary"] = None
+                st.rerun()
 
     render_messages()
 
