@@ -58,6 +58,9 @@ def init_session_state() -> None:
     st.session_state.setdefault("server_kind", None)
     st.session_state.setdefault("server_label", None)
     st.session_state.setdefault("summary", None)
+    # Rolling running summary used as context on each agent turn.
+    # Grows turn-by-turn instead of stuffing literal history into the prompt.
+    st.session_state.setdefault("running_summary", "")
 
 
 def server_params_for(kind: str) -> Any:
@@ -98,27 +101,62 @@ def connect(kind: str, label: str) -> None:
     # tools no longer present).
     st.session_state["messages"] = []
     st.session_state["summary"] = None
+    st.session_state["running_summary"] = ""
 
 
 def build_llm(model: str, base_url: str) -> LLM:
     return LLM(model=f"ollama/{model}", base_url=base_url)
 
 
-def render_history_for_prompt(max_turns: int = 8) -> str:
-    """Render recent conversation turns as plain text for the task prompt.
+def update_running_summary(
+    prev_summary: str, user_msg: str, assistant_reply: str, llm: LLM
+) -> str:
+    """Roll the conversation summary forward by one turn.
 
-    CrewAI's Task doesn't carry conversation memory natively, so we
-    inject the recent transcript into the task description on each turn.
-    Limit to the last N turns to keep prompts bounded.
+    Folds the new (user, assistant) exchange into the previous summary so
+    the next agent turn sees a single compact context string instead of
+    an ever-growing literal transcript. Classic LangChain
+    ConversationSummaryMemory pattern, here as a tiny no-tools CrewAI
+    task so it stays consistent with the rest of the app.
     """
-    history = st.session_state["messages"][-(max_turns * 2):]
-    if not history:
-        return ""
-    lines = []
-    for m in history:
-        speaker = "User" if m["role"] == "user" else "Assistant"
-        lines.append(f"{speaker}: {m['content']}")
-    return "\n".join(lines)
+    description = (
+        f"Previous summary of the conversation:\n"
+        f"{prev_summary or '(no prior turns yet)'}\n\n"
+        f"New turn just completed:\n"
+        f"User: {user_msg}\n"
+        f"Assistant: {assistant_reply}\n\n"
+        f"Produce an UPDATED summary that covers everything the user and "
+        f"assistant have discussed so far, including the new turn. Keep it "
+        f"under 5 sentences. If a tool was called, mention it briefly. "
+        f"This summary will be passed to the assistant as context for the "
+        f"NEXT user message, so preserve any facts/preferences/identifiers "
+        f"the user has shared."
+    )
+    agent = Agent(
+        role="Conversation Summarizer",
+        goal="Maintain a short rolling summary of an ongoing conversation.",
+        backstory=(
+            "You produce neutral, faithful, compact summaries that preserve "
+            "the user's stated facts and preferences across turns."
+        ),
+        tools=[],
+        llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )
+    task = Task(
+        description=description,
+        expected_output="Updated rolling summary, under 5 sentences.",
+        agent=agent,
+    )
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
+        process=Process.sequential,
+        verbose=False,
+        memory=False,
+    )
+    return str(crew.kickoff()).strip()
 
 
 def summarize_conversation(llm: LLM) -> str:
@@ -169,24 +207,18 @@ def summarize_conversation(llm: LLM) -> str:
 def chat_turn(user_message: str, llm: LLM, base_url: str) -> tuple[str, str]:
     """Run one CrewAI turn given the new user message. Returns (reply, trace).
 
-    Memory: we use *manual transcript injection* via
-    `render_history_for_prompt`, NOT CrewAI's `memory=True`. Why:
-
-    - CrewAI 1.14's `memory=True` requires Chroma vector storage, and on
-      this stack Chroma fails to initialize without OPENAI_API_KEY even
-      when EMBEDDINGS_OLLAMA_* env vars are set. Verified empirically:
-      Turn 1 errors with "Memory requires an embedder for vector search
-      but initialization failed: The CHROMA_OPENAI_API_KEY..." This is
-      why commit f0a8ce7 explicitly disabled it on this branch.
-    - Manual transcript injection works without any embedder, gives
-      literal recall of recent turns (what a chatbot needs), and keeps
-      the prompt fully visible to students.
-
-    If you upgrade CrewAI / Chroma in the future, retry `memory=True` —
-    it may start working without OPENAI_API_KEY.
+    Memory: we use a *rolling summary* (st.session_state['running_summary'])
+    that gets folded forward after each turn, NOT CrewAI's `memory=True`.
+    Why not memory=True? CrewAI 1.14's memory layer requires Chroma vector
+    storage, which on this stack fails to init without OPENAI_API_KEY even
+    when EMBEDDINGS_OLLAMA_* env vars are set (commit f0a8ce7 hit the same
+    issue). The rolling summary works without any embedder, keeps prompts
+    bounded regardless of conversation length, and is fully visible to
+    students. Cost: one extra LLM call per turn to roll the summary
+    forward.
     """
     tools = st.session_state["tools"]
-    history = render_history_for_prompt()
+    running_summary = st.session_state.get("running_summary", "")
 
     backstory = (
         "You are a friendly conversational assistant. You have access to "
@@ -202,7 +234,8 @@ def chat_turn(user_message: str, llm: LLM, base_url: str) -> tuple[str, str]:
     )
 
     task_description = (
-        f"{history}\n\n" if history else ""
+        f"Summary of the conversation so far:\n{running_summary}\n\n"
+        if running_summary else ""
     ) + f"User: {user_message}\nAssistant:"
 
     agent = Agent(
@@ -231,7 +264,25 @@ def chat_turn(user_message: str, llm: LLM, base_url: str) -> tuple[str, str]:
     with redirect_stdout(buf), redirect_stderr(buf):
         result = crew.kickoff()
 
-    return str(result), strip_ansi(buf.getvalue())
+    reply = str(result)
+    trace = strip_ansi(buf.getvalue())
+
+    # Roll the summary forward so the NEXT turn sees this exchange
+    # compressed into the running summary. If summarization fails we
+    # don't want it to break the chat, so fall back to a literal
+    # concatenation.
+    try:
+        st.session_state["running_summary"] = update_running_summary(
+            running_summary, user_message, reply, llm
+        )
+    except Exception:
+        prev = running_summary
+        st.session_state["running_summary"] = (
+            (prev + "\n" if prev else "")
+            + f"User: {user_message}\nAssistant: {reply}"
+        )
+
+    return reply, trace
 
 
 def sidebar() -> tuple[str, str]:
@@ -307,6 +358,7 @@ def sidebar() -> tuple[str, str]:
     if cols[1].button("Clear", use_container_width=True):
         st.session_state["messages"] = []
         st.session_state["summary"] = None
+        st.session_state["running_summary"] = ""
         st.rerun()
 
     return model, base_url
