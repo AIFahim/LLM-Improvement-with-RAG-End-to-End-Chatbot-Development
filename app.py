@@ -106,8 +106,8 @@ def main():
         
         # Model information
         with st.expander("Model Information"):
-            st.write(f"**Model:** {config.LLM_MODEL}")
-            st.write(f"**Base URL:** {config.LLM_BASE_URL}")
+            st.write(f"**Model:** {config.OLLAMA_MODEL}")
+            st.write(f"**Base URL:** {config.OLLAMA_BASE_URL}")
             st.write(f"**Temperature:** {config.LLM_TEMPERATURE}")
     
     # Main chat interface

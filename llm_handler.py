@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 class LLMHandler:
     """Handles interactions with Ollama LLM"""
     
-    def __init__(self, model_name: str = config.LLM_MODEL,
-                 base_url: str = config.LLM_BASE_URL,
+    def __init__(self, model_name: str = config.OLLAMA_MODEL,
+                 base_url: str = config.OLLAMA_BASE_URL,
                  temperature: float = config.LLM_TEMPERATURE):
         """
         Initialize the LLM handler

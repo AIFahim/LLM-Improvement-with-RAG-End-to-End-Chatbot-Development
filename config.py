@@ -20,6 +20,10 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
+# Embedding model, kept separate from the chat model so ingestion does not have
+# to load the larger generative model into memory alongside it
+OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "qwen2.5:1.5b")
+
 # Azure OpenAI Configuration
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")  # e.g., https://your-resource.openai.azure.com/
@@ -36,6 +40,10 @@ CHUNK_OVERLAP = 200
 # Vector Database Configuration
 CHROMA_PERSIST_DIR = str(VECTOR_DB_DIR)
 COLLECTION_NAME = "pdf_documents"
+
+# Number of chunks embedded per request, so a large PDF does not become one
+# huge call that fails as a whole
+EMBED_BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "16"))
 
 # Streamlit Configuration
 PAGE_TITLE = "RAG Chatbot Assistance"

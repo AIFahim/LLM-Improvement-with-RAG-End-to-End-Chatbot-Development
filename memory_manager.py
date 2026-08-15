@@ -98,7 +98,7 @@ class MemoryManager:
     def _get_embeddings(self) -> OllamaEmbeddings:
         """Get embeddings for vector memory."""
         return OllamaEmbeddings(
-            model=config.OLLAMA_MODEL,
+            model=config.OLLAMA_EMBED_MODEL,
             base_url=config.OLLAMA_BASE_URL,
         )
 
@@ -214,7 +214,7 @@ class VectorMemory:
     def __init__(self, session_id: str = "default"):
         self.session_id = session_id
         self._embeddings = OllamaEmbeddings(
-            model=config.OLLAMA_MODEL,
+            model=config.OLLAMA_EMBED_MODEL,
             base_url=config.OLLAMA_BASE_URL,
         )
         self._vector_store: Optional[Chroma] = None
