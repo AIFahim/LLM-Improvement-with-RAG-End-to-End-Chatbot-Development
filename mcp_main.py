@@ -40,7 +40,19 @@ def strip_ansi(text: str) -> str:
 
 
 def build_llm(model: str, base_url: str) -> LLM:
-    """Construct an Ollama-backed CrewAI LLM."""
+    """Construct an Ollama-backed CrewAI LLM.
+
+    Note on context size: CrewAI does NOT accept num_ctx here — it
+    forwards unknown kwargs into the OpenAI-compatible completion call,
+    which rejects them. Set the window on the Ollama server instead:
+
+        OLLAMA_CONTEXT_LENGTH=8192 ollama serve
+
+    This matters when a tool returns a lot of text (a DeepWiki page runs
+    to thousands of tokens). Past the window the result is truncated
+    before the model sees it, and the agent replies "I need more
+    information on how to proceed" rather than raising an error.
+    """
     return LLM(model=f"ollama/{model}", base_url=base_url)
 
 
