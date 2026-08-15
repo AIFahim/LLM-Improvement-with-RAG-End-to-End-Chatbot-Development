@@ -1,0 +1,31 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.idea/
+.cursor/
+
+# Vector and memory stores (rebuilt from pdfFiles/)
+vectorDB/
+vectorDB.bak-*/
+memoryDB/
+.deepeval/
+
+# Logs
+logs/
+*.log
+
+# Generated output
+reports/
+mcp_diagrams/
+temp_media/
+
+# Uploaded source documents
+pdfFiles/
