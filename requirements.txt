@@ -1,7 +1,11 @@
 # Core LangChain Framework
 langchain==0.3.11
-langchain-core>=0.3.25
+langchain-core>=0.3.60,<0.4
 langchain-community==0.3.11
+langsmith<0.3
+
+# Agent Framework (create_react_agent)
+langgraph==0.2.76
 
 # Vector Store & Embeddings
 langchain-chroma
@@ -12,7 +16,7 @@ langchain-ollama
 langchain-openai>=0.2.0
 
 # Experimental (for Python REPL tool)
-langchain-experimental>=0.3.0
+langchain-experimental>=0.3.0,<0.4
 
 # Web Search Tool (DuckDuckGo)
 duckduckgo-search>=6.0.0
