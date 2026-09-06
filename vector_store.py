@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class VectorStoreManager:
     """Manages vector database operations with ChromaDB"""
     
-    def __init__(self, model_name: str = config.LLM_MODEL,
+    def __init__(self, model_name: str = config.EMBEDDING_MODEL,
                  base_url: str = config.LLM_BASE_URL):
         """
         Initialize the vector store manager

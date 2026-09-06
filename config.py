@@ -36,7 +36,10 @@ AZURE_OPENAI_DEPLOYMENT = os.environ.get(
 )
 AZURE_OPENAI_API_VERSION = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
 
-# Backwards-compat aliases (used by vector_store.py for embeddings)
+# Embedding model (chat models can't produce embeddings on newer Ollama)
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "nomic-embed-text")
+
+# Backwards-compat aliases
 LLM_MODEL = OLLAMA_MODEL
 LLM_BASE_URL = OLLAMA_BASE_URL
 
