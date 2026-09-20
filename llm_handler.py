@@ -4,8 +4,14 @@ Enhanced with retry logic, streaming, caching, and monitoring
 """
 import time
 from typing import Optional, Dict, Any, Generator
-from langchain_classic.memory import ConversationBufferMemory
-from langchain_classic.chains import RetrievalQA
+try:
+    # langchain >= 1.0 moved these into the langchain-classic package
+    from langchain_classic.memory import ConversationBufferMemory
+    from langchain_classic.chains import RetrievalQA
+except ImportError:
+    # langchain 0.3.x (what requirements.txt pins)
+    from langchain.memory import ConversationBufferMemory
+    from langchain.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
 from langchain_core.language_models.base import BaseLanguageModel
 import config
