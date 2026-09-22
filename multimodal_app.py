@@ -121,6 +121,24 @@ def display_multimodal_chat():
                             for tc in msg["tool_calls"]:
                                 st.code(json.dumps(tc, indent=2, default=str), language="json")
 
+    # Voice attachment: record or upload. This lives in the chat tab rather than
+    # the sidebar because st.audio_input shows "An error has occurred" after
+    # recording when it is placed inside st.sidebar.
+    with st.expander("Attach voice (record or upload)"):
+        recorded_audio = st.audio_input("Record Voice", key="chat_audio_input")
+        uploaded_audio = st.file_uploader(
+            "Or upload an audio file",
+            type=["wav", "mp3", "flac", "ogg", "m4a"],
+            key="chat_audio_upload",
+        )
+        audio_source = recorded_audio or uploaded_audio
+        if audio_source is not None:
+            audio_key = f"audio_{audio_source.size}"
+            if audio_key != st.session_state.sent_audio_id:
+                audio_source.seek(0)
+                st.session_state.pending_audio = audio_source.read()
+                audio_source.seek(0)
+
     # Show pending attachment indicator above chat input
     has_pending_image = st.session_state.pending_image_bytes is not None
     has_pending_audio = st.session_state.pending_audio is not None
@@ -197,6 +215,8 @@ def display_multimodal_chat():
                 st.image(image_bytes_for_display, width=250)
             if display_text:
                 st.markdown(display_text)
+            # Filled with the transcription once the voice message is processed
+            voice_text_placeholder = st.empty()
 
         # Process with agent
         with st.chat_message("assistant"):
@@ -209,6 +229,7 @@ def display_multimodal_chat():
                 if not user_text:
                     user_msg["voice_text"] = response.transcription.text
                     user_msg["content"] = response.transcription.text
+                    voice_text_placeholder.markdown(response.transcription.text)
 
             st.session_state.mm_messages.append(user_msg)
 
@@ -536,13 +557,7 @@ def display_sidebar():
                 st.session_state.pending_image = uploaded_image
                 st.image(st.session_state.pending_image_bytes, width=150, caption="Pending")
 
-        audio_input = st.audio_input("Record Voice", key="chat_audio_input")
-        if audio_input is not None:
-            audio_key = f"audio_{audio_input.size}"
-            if audio_key != st.session_state.sent_audio_id:
-                audio_input.seek(0)
-                st.session_state.pending_audio = audio_input.read()
-                audio_input.seek(0)
+        st.caption("Voice: use **Attach voice** in the Multimodal Chat tab.")
 
         st.divider()
 
